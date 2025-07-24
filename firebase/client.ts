@@ -18,9 +18,18 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Initialize Firebase only if configuration is available
+let app: any = null;
+try {
+  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  } else {
+    console.warn('Firebase client: Missing configuration, Firebase features will be disabled');
+  }
+} catch (error) {
+  console.error('Firebase client initialization error:', error);
+}
 // const analytics = getAnalytics(app);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const auth = app ? getAuth(app) : null as any;
+export const db = app ? getFirestore(app) : null as any;
