@@ -10,8 +10,7 @@ import { useState, useRef, KeyboardEvent, useEffect } from "react";
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import FormField from "@/components/FormField";
-import { auth } from "@/firebase/client";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { clientOllamaAdapter } from "@/lib/services/client_ollama_adapter";
 
 const generateFormSchema = z.object({
@@ -189,8 +188,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 const GeneratePage = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, authInitialized } = useFirebaseAuth();
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [techInput, setTechInput] = useState("");
   const techInputRef = useRef<HTMLInputElement>(null);
@@ -228,27 +226,22 @@ const GeneratePage = () => {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setLoading(false);
-      setUser(currentUser);
-      
-      if (!currentUser) {
-        router.push("/sign-in");
-        return;
-      }
-      
-      if (currentUser.uid !== AUTHORIZED_USER_ID) {
-        toast.error("You are not authorized to access this page");
-        router.push("/");
-        return;
-      }
-      
-      setIsAuthorized(true);
-      fetchColleges();
-    });
+    if (!authInitialized) return;
 
-    return () => unsubscribe();
-  }, [router]);
+    if (!user) {
+      router.push("/sign-in");
+      return;
+    }
+    
+    if (user.uid !== AUTHORIZED_USER_ID) {
+      toast.error("You are not authorized to access this page");
+      router.push("/");
+      return;
+    }
+    
+    setIsAuthorized(true);
+    fetchColleges();
+  }, [user, authInitialized, router]);
 
   const fetchColleges = async () => {
     try {

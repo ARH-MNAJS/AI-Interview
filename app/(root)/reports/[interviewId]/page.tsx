@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { toast } from "sonner";
-import { auth } from "@/firebase/client";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 
@@ -44,28 +44,22 @@ const InterviewReportPage = () => {
   const params = useParams();
   const interviewId = params.interviewId as string;
   
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, authInitialized } = useFirebaseAuth();
   const [isTPO, setIsTPO] = useState(false);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [attempts, setAttempts] = useState<StudentAttempt[]>([]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(false);
-      setUser(currentUser);
-      
-      if (!currentUser) {
-        router.push("/sign-in");
-        return;
-      }
-      
-      // Check TPO access and fetch data
-      await checkAccess(currentUser);
-    });
+    if (!authInitialized) return;
 
-    return () => unsubscribe();
-  }, [router, interviewId]);
+    if (!user) {
+      router.push("/sign-in");
+      return;
+    }
+    
+    // Check TPO access and fetch data
+    checkAccess(user);
+  }, [user, authInitialized, router, interviewId]);
 
   const checkAccess = async (user: User) => {
     try {

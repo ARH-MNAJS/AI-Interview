@@ -76,6 +76,14 @@ If you see Firebase-related build errors:
 2. **Invalid Private Key**: Make sure the private key includes `\n` for newlines
 3. **Project ID Mismatch**: Verify your Firebase project ID is correct
 
+### Authentication Errors
+
+If you see "Cannot read properties of null (reading 'onAuthStateChanged')":
+
+1. **Environment Variables**: Ensure Firebase variables are properly set on Vercel
+2. **Configuration**: The app will fallback gracefully if Firebase is not configured
+3. **Network**: Check if the `/api/firebase-config` endpoint is accessible
+
 ### CORS Issues
 
 The app automatically handles CORS by routing Ollama requests through `/api/ollama-proxy`. No additional configuration needed.

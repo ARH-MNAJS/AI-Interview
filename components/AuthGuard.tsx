@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/firebase/client";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -18,31 +17,26 @@ interface AuthGuardProps {
 
 const AuthGuard = ({ children, user: serverUser, isAuthorizedForGenerate, isTPO }: AuthGuardProps) => {
   const pathname = usePathname();
-  const [user, setUser] = useState<any>(serverUser);
-  const [loading, setLoading] = useState(true);
-  const [authInitialized, setAuthInitialized] = useState(false);
+  const { user: clientUser, loading, authInitialized, firebaseReady } = useFirebaseAuth();
+  
+  // Use server user as fallback if client user is not available
+  const user = clientUser || serverUser;
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      setAuthInitialized(true);
-      setLoading(false);
+    if (!authInitialized || !firebaseReady) return;
 
-      // If user is authenticated and on auth pages, redirect to home
-      if (currentUser && (pathname === "/sign-in" || pathname === "/sign-up")) {
-        window.location.href = "/";
-        return;
-      }
+    // If user is authenticated and on auth pages, redirect to home
+    if (user && (pathname === "/sign-in" || pathname === "/sign-up")) {
+      window.location.href = "/";
+      return;
+    }
 
-      // If user is not authenticated and not on auth pages, redirect to sign-in
-      if (!currentUser && pathname !== "/sign-in" && pathname !== "/sign-up") {
-        window.location.href = "/sign-in";
-        return;
-      }
-    });
-
-    return () => unsubscribe();
-  }, [pathname]);
+    // If user is not authenticated and not on auth pages, redirect to sign-in
+    if (!user && pathname !== "/sign-in" && pathname !== "/sign-up") {
+      window.location.href = "/sign-in";
+      return;
+    }
+  }, [user, pathname, authInitialized, firebaseReady]);
 
   // Show loading while auth is being initialized
   if (loading || !authInitialized) {

@@ -2,15 +2,19 @@
 
 import { Button } from "@/components/ui/button";
 import { signOut } from "firebase/auth";
-import { auth } from "@/firebase/client";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 
 const LogoutButton = () => {
+  const { auth } = useFirebaseAuth();
+
   const handleLogout = async () => {
     try {
       // Clear server-side session
       await fetch("/api/auth/signout", { method: "POST" });
       // Clear client-side Firebase auth and redirect
-      await signOut(auth);
+      if (auth) {
+        await signOut(auth);
+      }
       window.location.href = "/sign-in";
     } catch (error) {
       console.error("Error signing out:", error);

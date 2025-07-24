@@ -4,7 +4,7 @@ import { z } from "zod";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
-import { auth } from "@/firebase/client";
+import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,6 +34,7 @@ const authFormSchema = (type: FormType) => {
 
 const AuthForm = ({ type }: { type: FormType }) => {
   const router = useRouter();
+  const { auth } = useFirebaseAuth();
   const [colleges, setColleges] = useState<College[]>([]);
   const [selectedCollegeData, setSelectedCollegeData] = useState<{
     branches: string[];
@@ -87,6 +88,11 @@ const AuthForm = ({ type }: { type: FormType }) => {
   };
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (!auth) {
+      toast.error("Authentication service not available");
+      return;
+    }
+
     try {
       if (type === "sign-up") {
         const { name, email, password, college, branch, year } = data;

@@ -6,30 +6,48 @@ import { getFirestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID,
-  measurementId: process.env.FIREBASE_MEASUREMENT_ID,
+let app: any = null;
+let auth: any = null;
+let db: any = null;
+
+// Initialize Firebase with config from API
+const initializeFirebaseClient = async () => {
+  if (typeof window === 'undefined') {
+    // Server-side: return null objects
+    return { auth: null, db: null };
+  }
+
+  try {
+    // Get Firebase config from API endpoint
+    const response = await fetch('/api/firebase-config');
+    const { config, hasValidConfig } = await response.json();
+
+    if (!hasValidConfig || !config) {
+      console.warn('Firebase client: No valid configuration available');
+      return { auth: null, db: null };
+    }
+
+    // Initialize Firebase if not already initialized
+    if (!getApps().length) {
+      app = initializeApp(config);
+    } else {
+      app = getApp();
+    }
+
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    console.log('Firebase client initialized successfully');
+    return { auth, db };
+  } catch (error) {
+    console.error('Firebase client initialization error:', error);
+    return { auth: null, db: null };
+  }
 };
 
-// Initialize Firebase only if configuration is available
-let app: any = null;
-try {
-  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  } else {
-    console.warn('Firebase client: Missing configuration, Firebase features will be disabled');
-  }
-} catch (error) {
-  console.error('Firebase client initialization error:', error);
+// Initialize immediately if in browser
+if (typeof window !== 'undefined') {
+  initializeFirebaseClient();
 }
-// const analytics = getAnalytics(app);
 
-export const auth = app ? getAuth(app) : null as any;
-export const db = app ? getFirestore(app) : null as any;
+export { auth, db, initializeFirebaseClient };
