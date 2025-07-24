@@ -214,6 +214,12 @@ export async function getFeedbackById(feedbackId: string): Promise<Feedback | nu
 // Enhanced function to get interviews for students based on their college/branch/year
 export async function getInterviewsForStudent(userId: string): Promise<Interview[] | null> {
   try {
+    // Validate userId
+    if (!userId || userId.trim() === '') {
+      console.warn('getInterviewsForStudent called with invalid userId:', userId);
+      return [];
+    }
+
     // First get user details to check their college/branch/year
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) return [];
@@ -536,6 +542,12 @@ export async function getLatestInterviews(
 export async function getInterviewsByUserId(
   userId: string
 ): Promise<Interview[] | null> {
+  // Validate userId
+  if (!userId || userId.trim() === '') {
+    console.warn('getInterviewsByUserId called with invalid userId:', userId);
+    return [];
+  }
+
   const interviews = await db
     .collection("interviews")
     .where("userId", "==", userId)

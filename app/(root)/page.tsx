@@ -12,9 +12,36 @@ import {
 async function Home() {
   const user = await getCurrentUser();
 
+  // Handle case where user is not authenticated
+  if (!user?.id) {
+    return (
+      <>
+        <section className="card-cta">
+          <div className="flex flex-col gap-6 max-w-lg">
+            <h2>Get Interview-Ready with AI-Powered Practice & Feedback</h2>
+            <p className="text-lg">
+              Practice real interview questions & get instant feedback
+            </p>
+            <Link href="/sign-in" className="cta-btn">
+              Sign In to Get Started
+            </Link>
+          </div>
+
+          <Image
+            src="/robot.png"
+            alt="robo-dude"
+            width={400}
+            height={400}
+            className="max-sm:hidden"
+          />
+        </section>
+      </>
+    );
+  }
+
   const [userInterviews, allInterviews] = await Promise.all([
-    getInterviewsByUserId(user?.id!),
-    getInterviewsForStudent(user?.id!),
+    getInterviewsByUserId(user.id),
+    getInterviewsForStudent(user.id),
   ]);
 
   // Combine both completed and available interviews
