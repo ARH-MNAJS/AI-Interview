@@ -15,7 +15,7 @@ console.log('===============================');
 
 // Test configurations
 const testConfigs = {
-  similarityThreshold: 0.75,
+  similarityThreshold: 0.6,
   minAudioSize: 1000, // bytes
   expectedFeatures: ['mfccs', 'fundamentalFrequency', 'spectralCentroid', 'spectralRolloff', 'zeroCrossingRate']
 };
@@ -69,7 +69,7 @@ async function testSimilarityCalculation() {
   
   try {
     console.log('✅ Expected: Same voice should have similarity > 0.85');
-    console.log('✅ Expected: Different voices should have similarity < 0.75');
+    console.log('✅ Expected: Different voices should have similarity < 0.6');
     console.log('✅ Expected: Weighted feature combination (MFCC 60%, F0 20%, Spectral 15%, ZCR 5%)');
     console.log('✅ Expected: Cosine similarity for MFCC vectors');
     console.log('✅ Expected: Normalized similarity for other features');
@@ -224,7 +224,7 @@ import { toast } from 'sonner';
 conversationHandler.setVoiceAnalysisEnabled(true);
 
 // Set sensitivity (0.1 = very sensitive, 0.95 = very lenient)
-conversationHandler.setVoiceSimilarityThreshold(0.75);
+conversationHandler.setVoiceSimilarityThreshold(0.6);
 
 // Start interview (automatically resets voice baseline)
 await conversationHandler.start(interviewConfig);

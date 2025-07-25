@@ -312,20 +312,23 @@
   }
 
   .new-interview-layout {
-    @apply flex flex-col w-full gap-6 h-screen max-h-screen overflow-hidden;
+    @apply flex flex-col w-full h-screen max-h-screen overflow-hidden px-6 py-6;
+    gap: 12px;
   }
 
   .interview-main-content {
-    @apply flex flex-row gap-6 w-full flex-1 min-h-0;
+    @apply flex flex-row w-full;
+    gap: 12px;
   }
 
   .camera-preview-area {
-    @apply flex flex-col flex-1 gap-4 min-h-0;
+    @apply flex flex-col flex-1;
+    gap: 8px;
   }
 
   .camera-preview {
     @apply dark-gradient rounded-2xl flex items-center justify-center border-2 border-primary-200/20 shadow-xl relative overflow-hidden transition-colors duration-300;
-    height: 60vh;
+    height: 550px;
     padding: 1rem;
     background: linear-gradient(135deg, #1A1C20 0%, #0F1419 50%, #08090D 100%);
   }
@@ -380,12 +383,12 @@
   }
 
   .right-sidebar {
-    @apply flex flex-col gap-4 w-80 min-h-0;
+    @apply flex flex-col w-80;
   }
 
   .sidebar-box-full {
     @apply border-gradient p-0.5 rounded-2xl;
-    height: 60vh;
+    height: 550px;
   }
 
   .sidebar-box-content {
@@ -451,6 +454,85 @@
     50% { 
       box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); 
     }
+  }
+
+  /* Compact button styles for inline status bar - ALL SAME HEIGHT */
+  .btn-call-compact {
+    @apply inline-flex items-center justify-center text-sm font-semibold text-black transition-all duration-300 rounded-full shadow-lg;
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    height: 36px;
+    padding: 0 16px;
+    min-width: 120px;
+  }
+
+  .btn-call-compact:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+  }
+
+  .mic-button-compact {
+    @apply inline-flex items-center justify-center text-sm font-semibold text-white transition-all duration-300 rounded-full shadow-lg;
+    background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+    height: 36px;
+    padding: 0 16px;
+    min-width: 100px;
+  }
+
+  .mic-button-compact:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+  }
+
+  .mic-button-compact.recording {
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    animation: recordingPulse 2s infinite;
+  }
+
+  .end-button-compact {
+    @apply inline-flex items-center justify-center text-sm font-semibold text-white transition-all duration-300 rounded-full shadow-lg;
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    height: 36px;
+    padding: 0 16px;
+    min-width: 100px;
+  }
+
+  .end-button-compact:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+  }
+
+  /* Status badges - SAME HEIGHT AS BUTTONS */
+  .warning-badge {
+    @apply inline-flex items-center justify-center text-xs bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 rounded-full border border-yellow-500/30 transition-colors duration-200;
+    height: 36px;
+    padding: 0 12px;
+  }
+
+  .away-badge {
+    @apply inline-flex items-center justify-center text-xs bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-full border border-orange-500/30 transition-colors duration-200;
+    height: 36px;
+    padding: 0 12px;
+  }
+
+  /* Camera button - SAME HEIGHT AS OTHER BUTTONS */
+  .camera-button-compact {
+    @apply inline-flex items-center justify-center text-xs bg-primary-200/20 hover:bg-primary-200/30 text-primary-200 rounded-full border border-primary-200/30 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    height: 36px;
+    padding: 0 12px;
+  }
+
+  /* Full width status container */
+  .status-text-full-width {
+    @apply text-xs text-gray-400 py-3 px-6 bg-gradient-to-r from-dark-200 to-dark-300 rounded-xl border border-gray-600/20 w-full;
+  }
+
+  /* Mic button tooltip */
+  .mic-tooltip {
+    @apply absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 px-3 py-2 text-xs text-white bg-gray-800 rounded-lg shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50;
+  }
+
+  .mic-button-compact:hover .mic-tooltip {
+    @apply opacity-100;
   }
 }
 

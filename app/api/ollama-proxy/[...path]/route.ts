@@ -35,10 +35,12 @@ async function handleRequest(
       url.searchParams.set(key, value);
     });
 
-    // Prepare headers - exclude host and other problematic headers
+    // Prepare headers - exclude problematic headers that might cause 403
     const headers = new Headers();
     const excludeHeaders = new Set([
       'host',
+      'origin',
+      'referer', 
       'x-forwarded-for',
       'x-forwarded-host',
       'x-forwarded-proto',
@@ -47,7 +49,13 @@ async function handleRequest(
       'upgrade',
       'sec-websocket-key',
       'sec-websocket-version',
-      'sec-websocket-extensions'
+      'sec-websocket-extensions',
+      'sec-fetch-site',
+      'sec-fetch-mode',
+      'sec-fetch-dest',
+      'sec-ch-ua',
+      'sec-ch-ua-mobile',
+      'sec-ch-ua-platform'
     ]);
 
     request.headers.forEach((value, key) => {
@@ -55,6 +63,14 @@ async function handleRequest(
         headers.set(key, value);
       }
     });
+
+    // Use a curl-like User-Agent to avoid browser-specific blocking
+    headers.set('User-Agent', 'CCInterview-Proxy/1.0');
+    
+    // Add Accept header if not present
+    if (!headers.has('Accept')) {
+      headers.set('Accept', '*/*');
+    }
 
     // Prepare request options
     const requestOptions: RequestInit = {
@@ -69,8 +85,15 @@ async function handleRequest(
       requestOptions.duplex = 'half'; // Required for streaming request bodies
     }
 
+    console.log(`Ollama proxy: ${method} ${targetUrl}`, {
+      headers: Object.fromEntries(headers.entries()),
+      excludedHeaders: [...excludeHeaders]
+    });
+
     // Make the proxied request
     const response = await fetch(url.toString(), requestOptions);
+
+    console.log(`Ollama proxy response: ${response.status} ${response.statusText}`);
 
     // Create response headers with CORS
     const responseHeaders = new Headers();

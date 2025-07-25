@@ -1117,7 +1117,7 @@ const Agent = ({
       });
 
       // Optional: Additional actions when voice change is detected
-      if (result.isVoiceChanged && result.confidence > 0.7) {
+      if (result.isVoiceChanged && result.confidence > 0.6) {
         console.warn("🔴 HIGH CONFIDENCE voice change detected - this likely indicates a different person is speaking");
         
         // You could add more severe actions here like:
@@ -1401,7 +1401,7 @@ IMPORTANT RESPONSE RULES:
           <div className="camera-preview-area">
             <div className={cn(
               "camera-preview",
-              !isFaceDetected && faceApiLoaded && "no-face"
+              !isFaceDetected && faceApiLoaded && cameraStream && "no-face"
             )}>
               {/* Camera Feed or Fallback */}
               <div className="user-in-camera">
@@ -1532,62 +1532,6 @@ IMPORTANT RESPONSE RULES:
               </div>
             </div>
 
-            {/* Status Text Below Camera Preview */}
-            <div className="status-text">
-              <div className="flex items-center justify-between w-full">
-                <span>Status: {state.callStatus} | Recording: {state.isRecording ? 'Yes' : 'No'} | Transcribing: {state.isTranscribing ? 'Yes' : 'No'} | Generating: {state.isGenerating ? 'Yes' : 'No'} | Warnings: {state.warningLevel}/2</span>
-                
-                {/* Face detection warning badges */}
-                {faceApiLoaded && faceCount > 1 && (
-                  <div className="warning-badge ml-2">
-                    <span className="flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                      </svg>
-                      Multiple Faces
-                    </span>
-                  </div>
-                )}
-                
-                {faceApiLoaded && faceCount === 0 && (
-                  <div className="away-badge ml-2">
-                    <span className="flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                      </svg>
-                      Interviewee Away
-                    </span>
-                  </div>
-                )}
-
-                {!cameraLoading && (
-                  <button
-                    onClick={cameraStream ? stopCamera : startCamera}
-                    disabled={cameraLoading}
-                    className="ml-4 px-3 py-1 text-xs bg-primary-200/20 hover:bg-primary-200/30 text-primary-200 rounded-full border border-primary-200/30 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {cameraStream ? (
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M15 8v8H5V8h10m1-2H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V7a1 1 0 00-1-1z"/>
-                          <path d="M18 8l4-4v12l-4-4V8z"/>
-                        </svg>
-                        Camera On
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M15 8v8H5V8h10m1-2H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V7a1 1 0 00-1-1z"/>
-                          <path d="M18 8l4-4v12l-4-4V8z"/>
-                          <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" strokeWidth="2"/>
-                        </svg>
-                        Enable Camera
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Right Sidebar */}
@@ -1620,6 +1564,125 @@ IMPORTANT RESPONSE RULES:
           </div>
         </div>
 
+        {/* Status Bar - Spans full width */}
+        <div className="status-text-full-width">
+          <div className="flex items-center justify-between w-full">
+            <span>Status: {state.callStatus} | Recording: {state.isRecording ? 'Yes' : 'No'} | Transcribing: {state.isTranscribing ? 'Yes' : 'No'} | Generating: {state.isGenerating ? 'Yes' : 'No'} | Warnings: {state.warningLevel}/2</span>
+            
+            <div className="flex items-center gap-3">
+              {/* Face detection warning badges */}
+              {faceApiLoaded && faceCount > 1 && cameraStream && (
+                <div className="warning-badge">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Multiple Faces
+                  </span>
+                </div>
+              )}
+              
+              {faceApiLoaded && faceCount === 0 && cameraStream && (
+                <div className="away-badge">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Away
+                  </span>
+                </div>
+              )}
+
+              {!cameraLoading && (
+                <button
+                  onClick={cameraStream ? stopCamera : startCamera}
+                  disabled={cameraLoading}
+                  className="camera-button-compact"
+                >
+                  {cameraStream ? (
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M15 8v8H5V8h10m1-2H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V7a1 1 0 00-1-1z"/>
+                        <path d="M18 8l4-4v12l-4-4V8z"/>
+                      </svg>
+                      Camera On
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M15 8v8H5V8h10m1-2H4a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V7a1 1 0 00-1-1z"/>
+                        <path d="M18 8l4-4v12l-4-4V8z"/>
+                        <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                      Enable Camera
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Interview Control Buttons */}
+              {state.callStatus !== CallStatus.ACTIVE ? (
+                <button className="relative btn-call-compact" onClick={() => handleCall()}>
+                  <span
+                    className={cn(
+                      "absolute animate-ping rounded-full opacity-75",
+                      state.callStatus !== CallStatus.CONNECTING && "hidden"
+                    )}
+                  />
+                  <span className="relative text-black">
+                    {state.callStatus === CallStatus.INACTIVE || state.callStatus === CallStatus.FINISHED
+                      ? "Start Interview"
+                      : "Connecting..."}
+                  </span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  {/* Hold to Speak Button with Tooltip */}
+                  <button
+                    className={cn(
+                      "mic-button-compact relative",
+                      state.isRecording && "recording",
+                      (isAnyProcessing || state.warningLevel >= WarningLevel.TERMINATED) && "opacity-50 cursor-not-allowed"
+                    )}
+                    onMouseDown={startRecording}
+                    onMouseUp={stopRecording}
+                    onMouseLeave={stopRecording}
+                    onTouchStart={startRecording}
+                    onTouchEnd={stopRecording}
+                    disabled={isAnyProcessing || state.warningLevel >= WarningLevel.TERMINATED}
+                  >
+                    {state.warningLevel >= WarningLevel.TERMINATED ? (
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                      </svg>
+                    )}
+                    {/* Tooltip */}
+                    <div className="mic-tooltip">
+                      Hold spacebar to talk
+                    </div>
+                  </button>
+
+                  {/* End Interview Button */}
+                  <button
+                    className="end-button-compact"
+                    onClick={handleDisconnect}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                    End
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Transcript Section - Always show when there are messages */}
         {state.messages.length > 0 && state.lastMessage && (
           <div className="transcript-border">
@@ -1637,79 +1700,7 @@ IMPORTANT RESPONSE RULES:
           </div>
         )}
 
-        {/* Control Buttons */}
-        <div className="interview-controls">
-          {state.callStatus !== CallStatus.ACTIVE ? (
-            <button className="relative btn-call" onClick={() => handleCall()}>
-              <span
-                className={cn(
-                  "absolute animate-ping rounded-full opacity-75",
-                  state.callStatus !== CallStatus.CONNECTING && "hidden"
-                )}
-              />
 
-              <span className="relative text-black">
-                {state.callStatus === CallStatus.INACTIVE || state.callStatus === CallStatus.FINISHED
-                  ? "Start Interview"
-                  : "Connecting..."}
-              </span>
-            </button>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              {/* Buttons Row */}
-              <div className="controls-row">
-                {/* Hold to Speak Button */}
-                <button
-                  className={cn(
-                    "mic-button",
-                    state.isRecording && "recording",
-                    (isAnyProcessing || state.warningLevel >= WarningLevel.TERMINATED) && "opacity-50 cursor-not-allowed"
-                  )}
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onMouseLeave={stopRecording}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
-                  disabled={isAnyProcessing || state.warningLevel >= WarningLevel.TERMINATED}
-                >
-                  {state.warningLevel >= WarningLevel.TERMINATED ? (
-                    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                  ) : (
-                    <svg 
-                      className="w-6 h-6 text-white" 
-                      fill="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                    </svg>
-                  )}
-                </button>
-
-                {/* End Interview Button */}
-                <button
-                  className="end-button"
-                  onClick={handleDisconnect}
-                >
-                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                  </svg>
-                  End Interview
-                </button>
-              </div>
-
-              {/* Instructions */}
-              <p className="text-xs text-gray-500 text-center max-w-md">
-                {state.warningLevel >= WarningLevel.TERMINATED 
-                  ? "This interview has been terminated due to inappropriate behavior."
-                  : "Hold the microphone button or press and hold SPACEBAR to speak"
-                }
-              </p>
-            </div>
-          )}
-        </div>
       </div>
     </>
   );
