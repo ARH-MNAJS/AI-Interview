@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { conversationHandler } from "@/lib/services/conversation_handler";
 import { interviewer } from "@/constants";
 import { clientFeedbackGenerator } from "@/lib/services/client_feedback_generator";
-import { CallStatus, ConversationMessage, Message, VoiceChangeResult } from "../types/conversation";
+import { CallStatus, ConversationMessage, Message } from "../types/conversation";
 
 interface SavedMessage {
   role: "user" | "system" | "assistant";
@@ -1082,50 +1082,7 @@ const Agent = ({
       dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.FINISHED });
     };
 
-    // Voice change detection callback
-    const onVoiceChangeDetected = (result: VoiceChangeResult) => {
-      console.warn("🚨 Voice change detected:", result);
-      
-      // Show warning toast with detailed information
-      toast.warning("⚠️ Different Speaker Detected!", {
-        description: `Voice similarity: ${(result.similarity * 100).toFixed(1)}%. ${result.reason || 'The voice pattern has changed during the interview.'}`,
-        duration: 10000, // Show for 10 seconds
-        action: {
-          label: "Acknowledge",
-          onClick: () => {
-            console.log("Voice change warning acknowledged by user");
-            // You could add additional actions here like:
-            // - Log the incident
-            // - Pause the interview
-            // - Send alert to admin
-          },
-        },
-        style: {
-          backgroundColor: '#ff6b6b',
-          color: 'white',
-          fontWeight: 'bold'
-        }
-      });
 
-      // Also show console warning for debugging
-      console.table({
-        'Voice Changed': result.isVoiceChanged ? '🚨 YES' : '✅ No',
-        'Similarity': `${(result.similarity * 100).toFixed(2)}%`,
-        'Confidence': `${(result.confidence * 100).toFixed(2)}%`,
-        'Reason': result.reason,
-        'Timestamp': new Date().toISOString()
-      });
-
-      // Optional: Additional actions when voice change is detected
-      if (result.isVoiceChanged && result.confidence > 0.6) {
-        console.warn("🔴 HIGH CONFIDENCE voice change detected - this likely indicates a different person is speaking");
-        
-        // You could add more severe actions here like:
-        // - dispatch({ type: 'INCREMENT_WARNING' });
-        // - Automatically pause interview
-        // - etc.
-      }
-    };
 
     conversationHandler.on("call-start", onCallStart);
     conversationHandler.on("call-end", onCallEnd);
@@ -1133,7 +1090,7 @@ const Agent = ({
     conversationHandler.on("speech-start", onSpeechStart);
     conversationHandler.on("speech-end", onSpeechEnd);
     conversationHandler.on("error", onError);
-    conversationHandler.on("voice-change", onVoiceChangeDetected);
+
 
     return () => {
       // Clean up event listeners
@@ -1143,7 +1100,7 @@ const Agent = ({
       conversationHandler.off("speech-start", onSpeechStart);
       conversationHandler.off("speech-end", onSpeechEnd);
       conversationHandler.off("error", onError);
-      conversationHandler.off("voice-change", onVoiceChangeDetected);
+
     };
   }, [handleInappropriateBehavior]);
 

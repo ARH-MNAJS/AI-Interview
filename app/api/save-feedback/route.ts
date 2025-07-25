@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const finalUserId = userId || requestUserId;
 
     // Validate input
-    if (!interviewId || !finalUserId || !totalScore || !categoryScores) {
+    if (!interviewId || !finalUserId || (totalScore === null || totalScore === undefined) || !categoryScores) {
       return Response.json(
         { success: false, error: "Missing required fields" }, 
         { status: 400 }

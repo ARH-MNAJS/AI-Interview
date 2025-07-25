@@ -15,10 +15,10 @@ interface StudentAttempt {
   userEmail: string;
   userBranch?: string;
   userYear?: string;
-  totalScore: number;
+  totalScore: number | string; // Allow "Cannot be determined"
   categoryScores?: Array<{
     name: string;
-    score: number;
+    score: number | string; // Allow "Cannot be determined"
     comment: string;
   }>;
   strengths?: string[];
@@ -154,10 +154,41 @@ const InterviewReportPage = () => {
 
 
 
-  const getScoreColor = (score: number) => {
+  const getScoreColor = (score: number | string) => {
+    if (typeof score === 'string') return "text-gray-600 bg-gray-100"; // For "Cannot be determined"
     if (score >= 80) return "text-green-600 bg-green-100";
     if (score >= 60) return "text-yellow-600 bg-yellow-100";
     return "text-red-600 bg-red-100";
+  };
+
+  // Helper function to format score display
+  const formatScore = (score: number | string): string => {
+    if (typeof score === 'string') return score; // "Cannot be determined"
+    return `${score}%`;
+  };
+
+  // Helper functions for calculations
+  const getNumericScores = (attempts: StudentAttempt[]): number[] => {
+    return attempts
+      .map(a => a.totalScore)
+      .filter((score): score is number => typeof score === 'number');
+  };
+
+  const calculateAverage = (attempts: StudentAttempt[]): string => {
+    const numericScores = getNumericScores(attempts);
+    if (numericScores.length === 0) return "Cannot be determined";
+    return Math.round(numericScores.reduce((sum, score) => sum + score, 0) / numericScores.length).toString();
+  };
+
+  const calculateHighest = (attempts: StudentAttempt[]): string => {
+    const numericScores = getNumericScores(attempts);
+    if (numericScores.length === 0) return "Cannot be determined";
+    return Math.max(...numericScores).toString();
+  };
+
+  const calculatePassed = (attempts: StudentAttempt[]): number => {
+    const numericScores = getNumericScores(attempts);
+    return numericScores.filter(score => score >= 70).length;
   };
 
   if (loading) {
@@ -267,19 +298,19 @@ const InterviewReportPage = () => {
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-green-600">
-                    {Math.round(attempts.reduce((sum, a) => sum + a.totalScore, 0) / attempts.length)}
+                    {calculateAverage(attempts)}
                   </p>
                   <p className="text-sm text-gray-600">Average Score</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-purple-600">
-                    {Math.max(...attempts.map(a => a.totalScore))}
+                    {calculateHighest(attempts)}
                   </p>
                   <p className="text-sm text-gray-600">Highest Score</p>
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-orange-600">
-                    {attempts.filter(a => a.totalScore >= 70).length}
+                    {calculatePassed(attempts)}
                   </p>
                   <p className="text-sm text-gray-600">Passed (≥70%)</p>
                 </div>
@@ -316,7 +347,7 @@ const InterviewReportPage = () => {
                         </td>
                         <td className="border border-border px-4 py-2">
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getScoreColor(attempt.totalScore)}`}>
-                            {attempt.totalScore}%
+                            {formatScore(attempt.totalScore)}
                           </span>
                         </td>
                         <td className="border border-border px-4 py-2 text-black dark:text-white">

@@ -1,10 +1,10 @@
 interface Feedback {
   id: string;
   interviewId: string;
-  totalScore: number;
+  totalScore: number | string; // Allow "Cannot be determined"
   categoryScores: Array<{
     name: string;
-    score: number;
+    score: number | string; // Allow "Cannot be determined"
     comment: string;
   }>;
   strengths: string[];
@@ -136,7 +136,7 @@ interface InterviewAttempt {
   userId: string;
   studentName: string;
   studentEmail: string;
-  totalScore: number;
+  totalScore: number | string; // Allow "Cannot be determined"
   createdAt: string;
 }
 
@@ -156,7 +156,7 @@ interface StudentFeedbackData {
   feedbackId: string;
   studentName: string;
   studentEmail: string;
-  totalScore: number;
+  totalScore: number | string; // Allow "Cannot be determined"
   attemptDate: string;
   college: string;
   branch: string;

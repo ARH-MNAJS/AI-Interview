@@ -4,13 +4,11 @@ import { clientOllamaAdapter, type ChatMessage } from './client_ollama_adapter';
 import { logger } from './logger';
 import { AUDIO_CONFIG } from '../config/services';
 import { globalCache } from './global_cache_system';
-import { voiceBiometricsAnalyzer } from './voice_biometrics_analyzer';
 import { 
   CallStatus, 
   ConversationConfig, 
   ConversationMessage, 
-  ConversationEventCallbacks,
-  VoiceChangeResult 
+  ConversationEventCallbacks
 } from '../../types/conversation';
 
 // Re-export types for convenience
@@ -47,11 +45,7 @@ export class ConversationHandler {
   private lastHealthCheck = new Map<string, number>();
   private preWarmPromise: Promise<void> | null = null;
   
-  // 🎯 VOICE CHANGE DETECTION
-  private voiceChangeCallbacks: {
-    onVoiceChangeDetected?: (result: VoiceChangeResult) => void;
-  } = {};
-  private isVoiceAnalysisEnabled = true; // Enabled for voice change detection
+
 
   // ⏱️ COMPREHENSIVE PERFORMANCE TIMING SYSTEM
   private performanceTimers = {
@@ -497,9 +491,7 @@ export class ConversationHandler {
       case 'error':
         this.callbacks.onError = callback as (error: Error) => void;
         break;
-      case 'voice-change':
-        this.callbacks.onVoiceChangeDetected = callback as (result: VoiceChangeResult) => void;
-        break;
+
     }
     logger.debug('ConversationHandler', `Registered event listener: ${event}`);
   }
@@ -524,9 +516,7 @@ export class ConversationHandler {
       case 'error':
         this.callbacks.onError = undefined;
         break;
-      case 'voice-change':
-        this.callbacks.onVoiceChangeDetected = undefined;
-        break;
+
     }
     logger.debug('ConversationHandler', `Removed event listener: ${event}`);
   }
@@ -566,8 +556,7 @@ export class ConversationHandler {
       this.isGeneratingResponse = false;
       this.conversationHistory = [];
       
-      // Reset voice analysis for new conversation
-      voiceBiometricsAnalyzer.resetBaseline();
+
 
              // Handle configuration
        if (typeof configOrWorkflowId === 'string') {
@@ -814,37 +803,7 @@ export class ConversationHandler {
             
             this.audioChunks = [];
 
-            // 🎯 VOICE CHANGE DETECTION DEBUG: Always log the check
-            logger.info('ConversationHandler', '🔍 Voice Analysis Check', {
-              isVoiceAnalysisEnabled: this.isVoiceAnalysisEnabled,
-              audioSize: audioBlob.size,
-              audioType: audioBlob.type,
-              sizeMeetsThreshold: audioBlob.size > 1000,
-              willAnalyze: this.isVoiceAnalysisEnabled && audioBlob.size > 1000
-            });
 
-            // 🎯 VOICE CHANGE DETECTION: Analyze voice in parallel (non-blocking)
-            if (this.isVoiceAnalysisEnabled && audioBlob.size > 1000) { // Only analyze if audio is substantial
-              logger.info('ConversationHandler', '🎯 Starting voice change analysis', {
-                audioSize: audioBlob.size,
-                audioType: audioBlob.type
-              });
-              
-              // Run voice analysis in parallel without blocking the main pipeline
-              this.analyzeVoiceChangeAsync(audioBlob).catch((error: any) => {
-                logger.error('ConversationHandler', '❌ Voice analysis failed (non-blocking)', {
-                  error: error?.message || 'Unknown error',
-                  audioSize: audioBlob.size,
-                  stack: error?.stack
-                });
-              });
-            } else {
-              logger.warn('ConversationHandler', '⚠️ Voice analysis skipped', {
-                reason: !this.isVoiceAnalysisEnabled ? 'disabled' : 'audio too small',
-                audioSize: audioBlob.size,
-                enabled: this.isVoiceAnalysisEnabled
-              });
-            }
 
             // 🚀 PARALLEL OPTIMIZATION 1: Start multiple operations concurrently
             const parallelProcessingPromises = [
@@ -1668,116 +1627,7 @@ CRITICAL RESPONSE RULES:
     this.forceResetStates();
   }
 
-  /**
-   * Analyze voice change asynchronously without blocking main pipeline
-   */
-  private async analyzeVoiceChangeAsync(audioBlob: Blob): Promise<void> {
-    try {
-      logger.info('ConversationHandler', '🎯 Starting async voice analysis', {
-        audioSize: audioBlob.size,
-        audioType: audioBlob.type,
-        timestamp: new Date().toISOString()
-      });
 
-             // Add timeout to prevent hanging (reduced to 3 seconds for faster response)
-       const timeoutPromise = new Promise<never>((_, reject) => {
-         setTimeout(() => reject(new Error('Voice analysis timeout')), 3000);
-       });
-
-      const analysisPromise = voiceBiometricsAnalyzer.analyzeVoiceChange(audioBlob);
-      
-      const voiceChangeResult = await Promise.race([analysisPromise, timeoutPromise]);
-      
-      logger.info('ConversationHandler', '✅ Voice analysis completed', {
-        similarity: voiceChangeResult.similarity,
-        isVoiceChanged: voiceChangeResult.isVoiceChanged,
-        confidence: voiceChangeResult.confidence,
-        reason: voiceChangeResult.reason,
-                 threshold: 0.90,
-        timestamp: new Date().toISOString()
-      });
-      
-      if (voiceChangeResult.isVoiceChanged) {
-        logger.warn('ConversationHandler', '🚨 VOICE CHANGE DETECTED!', {
-          similarity: voiceChangeResult.similarity,
-          confidence: voiceChangeResult.confidence,
-          reason: voiceChangeResult.reason,
-          timestamp: new Date().toISOString()
-        });
-        
-        // Trigger voice change callback
-        try {
-          this.callbacks.onVoiceChangeDetected?.(voiceChangeResult);
-          this.voiceChangeCallbacks.onVoiceChangeDetected?.(voiceChangeResult);
-          logger.info('ConversationHandler', '✅ Voice change notification sent successfully');
-        } catch (callbackError) {
-          logger.error('ConversationHandler', 'Voice change callback failed', callbackError);
-        }
-      } else {
-        logger.debug('ConversationHandler', '✅ Voice matches baseline', {
-          similarity: voiceChangeResult.similarity,
-          confidence: voiceChangeResult.confidence
-        });
-      }
-    } catch (error) {
-      logger.error('ConversationHandler', 'Voice analysis failed with error', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        audioSize: audioBlob.size
-      });
-      
-      // If voice analysis fails, we could optionally disable it temporarily
-      if (error instanceof Error && error.message.includes('timeout')) {
-        logger.warn('ConversationHandler', 'Voice analysis timed out - consider disabling for this session');
-        // Optionally: this.isVoiceAnalysisEnabled = false;
-      }
-    }
-  }
-
-  /**
-   * Set voice change detection callbacks
-   */
-  setVoiceChangeCallbacks(callbacks: { onVoiceChangeDetected?: (result: VoiceChangeResult) => void }): void {
-    this.voiceChangeCallbacks = callbacks;
-  }
-
-  /**
-   * Enable or disable voice change detection
-   */
-  setVoiceAnalysisEnabled(enabled: boolean): void {
-    this.isVoiceAnalysisEnabled = enabled;
-    logger.info('ConversationHandler', `Voice analysis ${enabled ? 'enabled' : 'disabled'}`);
-    
-    if (enabled) {
-      logger.info('ConversationHandler', '🎯 Voice change detection enabled - will monitor for speaker changes');
-    }
-  }
-
-  /**
-   * Configure voice analysis sensitivity
-   */
-  setVoiceSimilarityThreshold(threshold: number): void {
-    voiceBiometricsAnalyzer.setSimilarityThreshold(threshold);
-  }
-
-  /**
-   * Reset voice baseline (useful for new interviews)
-   */
-  resetVoiceBaseline(): void {
-    voiceBiometricsAnalyzer.resetBaseline();
-    logger.info('ConversationHandler', 'Voice baseline reset');
-  }
-
-  /**
-   * Get voice analysis configuration
-   */
-  getVoiceAnalysisConfig(): { enabled: boolean; threshold: number; hasBaseline: boolean } {
-    const config = voiceBiometricsAnalyzer.getConfiguration();
-    return {
-      enabled: this.isVoiceAnalysisEnabled,
-      threshold: config.threshold,
-      hasBaseline: config.hasBaseline
-    };
-  }
 }
 
 export const conversationHandler = new ConversationHandler(); 
