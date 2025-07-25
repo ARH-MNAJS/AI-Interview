@@ -32,14 +32,14 @@ export class ClientOllamaAdapter {
   private model: string;
 
   constructor() {
-    // 🚀 DIRECT CONNECTION: Use HTTPS Ollama server directly (no proxy needed)
-    this.baseUrl = process.env.NEXT_PUBLIC_OLLAMA_URL || 'https://dypai.ccxai.uk';
+    // 🚀 PROXY CONNECTION: Use Next.js API proxy to avoid CORS issues in production
+    this.baseUrl = '/api/ollama-proxy';
     this.model = process.env.NEXT_PUBLIC_OLLAMA_MODEL || 'gemma3:latest';
     
-    console.log('ClientOllamaAdapter initialized with direct connection:', {
+    console.log('ClientOllamaAdapter initialized with proxy connection:', {
       baseUrl: this.baseUrl,
       model: this.model,
-      note: 'Using direct HTTPS connection - no proxy overhead'
+      note: 'Using Next.js proxy to avoid CORS restrictions'
     });
   }
 

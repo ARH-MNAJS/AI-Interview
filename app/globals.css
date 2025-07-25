@@ -310,6 +310,148 @@
       @apply text-sm font-semibold capitalize;
     }
   }
+
+  .new-interview-layout {
+    @apply flex flex-col w-full gap-6 h-screen max-h-screen overflow-hidden;
+  }
+
+  .interview-main-content {
+    @apply flex flex-row gap-6 w-full flex-1 min-h-0;
+  }
+
+  .camera-preview-area {
+    @apply flex flex-col flex-1 gap-4 min-h-0;
+  }
+
+  .camera-preview {
+    @apply dark-gradient rounded-2xl flex items-center justify-center border-2 border-primary-200/20 shadow-xl relative overflow-hidden transition-colors duration-300;
+    height: 60vh;
+    padding: 1rem;
+    background: linear-gradient(135deg, #1A1C20 0%, #0F1419 50%, #08090D 100%);
+  }
+
+  .camera-preview.no-face {
+    @apply border-red-500 border-2;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+
+
+
+  .user-in-camera {
+    @apply flex flex-col items-center justify-center relative w-full h-full;
+  }
+
+  .user-in-camera video {
+    @apply w-full h-full object-cover rounded-xl;
+  }
+
+  .mirror-effect {
+    transform: scaleX(-1);
+  }
+
+  /* Optimize video rendering to prevent memory issues */
+  .user-in-camera video {
+    @apply w-full h-full object-cover rounded-xl;
+    max-width: 100%;
+    max-height: 100%;
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    display: block;
+    background: #000;
+  }
+
+
+
+  /* Ensure video container has proper dimensions */
+  .camera-preview .user-in-camera {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .status-text {
+    @apply text-xs text-gray-400 text-center py-3 px-6 bg-gradient-to-r from-dark-200 to-dark-300 rounded-xl border border-gray-600/20;
+  }
+
+  .right-sidebar {
+    @apply flex flex-col gap-4 w-80 min-h-0;
+  }
+
+  .sidebar-box-full {
+    @apply border-gradient p-0.5 rounded-2xl;
+    height: 60vh;
+  }
+
+  .sidebar-box-content {
+    @apply dark-gradient rounded-2xl h-full flex flex-col items-center justify-center p-6 relative overflow-hidden;
+    background: linear-gradient(135deg, #171532 0%, #0F1419 50%, #08090D 100%);
+  }
+
+  .sidebar-box-content::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-primary-200/5 to-transparent pointer-events-none;
+  }
+
+  .sidebar-box-content .avatar {
+    @apply z-10 flex items-center justify-center blue-gradient rounded-full size-[90px] relative shadow-lg;
+    box-shadow: 0 0 20px rgba(202, 197, 254, 0.3);
+
+    .animate-speak {
+      @apply absolute inline-flex size-5/6 animate-ping rounded-full bg-primary-200 opacity-75;
+    }
+  }
+
+  .sidebar-box-content h3 {
+    @apply text-primary-100 text-center mt-4 font-semibold tracking-wide;
+  }
+
+  .interview-controls {
+    @apply flex flex-col items-center gap-4 py-4;
+  }
+
+  .controls-row {
+    @apply flex items-center justify-center gap-6;
+  }
+
+  .mic-button {
+    @apply relative transition-all duration-300 flex items-center justify-center rounded-full w-16 h-16 border-0 shadow-lg;
+    background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+  }
+
+  .mic-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
+  }
+
+  .mic-button.recording {
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+    animation: recordingPulse 2s infinite;
+  }
+
+  .end-button {
+    @apply inline-flex items-center justify-center px-6 py-3 text-sm font-semibold text-white transition-all duration-300 rounded-full shadow-lg;
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+  }
+
+  .end-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);
+  }
+
+  @keyframes recordingPulse {
+    0%, 100% { 
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); 
+    }
+    50% { 
+      box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); 
+    }
+  }
 }
 
 @utility dark-gradient {

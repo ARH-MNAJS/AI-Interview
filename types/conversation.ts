@@ -1,5 +1,13 @@
 // Conversation-related types to avoid circular imports
 
+// Voice change detection result
+export interface VoiceChangeResult {
+  isVoiceChanged: boolean;
+  similarity: number;
+  confidence: number;
+  reason?: string;
+}
+
 // Conversation status enum
 export enum CallStatus {
   INACTIVE = "INACTIVE",
@@ -28,6 +36,7 @@ export interface ConversationEventCallbacks {
   onSpeechEnd?: () => void;
   onError?: (error: Error) => void;
   onStatusChange?: (status: CallStatus) => void;
+  onVoiceChangeDetected?: (result: VoiceChangeResult) => void;
 }
 
 // VAPI compatibility types (for backwards compatibility during migration)

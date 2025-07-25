@@ -16,27 +16,27 @@ export async function GET(request: NextRequest) {
 
     const servicesStatus = {
       edgeTTS: {
-        status: ttsStatus ? 'healthy' : 'unhealthy',
+        status: ttsHealth ? 'healthy' : 'unhealthy',
         service: 'Edge TTS',
         port: 5000,
-        note: ttsHealth.status === 'rejected' ? 'Connection failed' : undefined,
+        note: !ttsHealth ? 'Connection failed' : undefined,
       },
       whisperSTT: {
-        status: sttStatus ? 'healthy' : 'unhealthy',
+        status: sttHealth ? 'healthy' : 'unhealthy',
         service: 'Whisper STT',
         port: 5001,
-        note: sttHealth.status === 'rejected' ? 'Connection failed' : undefined,
+        note: !sttHealth ? 'Connection failed' : undefined,
       },
       ollama: {
-        status: llmStatus ? 'healthy' : 'unhealthy',
+        status: llmHealth ? 'healthy' : 'unhealthy',
         service: 'Ollama LLM',
         port: 11434,
-        note: llmHealth.status === 'rejected' || !llmStatus ? 'May not be accessible from Vercel server' : undefined,
+        note: !llmHealth ? 'Connection failed' : undefined,
       },
     };
 
     // Don't require Ollama for overall health since it works client-side
-    const allHealthy = ttsStatus && sttStatus;
+    const allHealthy = ttsHealth && sttHealth;
 
     logger.info('HealthCheck', 'Health check completed', {
       overall: allHealthy ? 'healthy' : 'unhealthy',
