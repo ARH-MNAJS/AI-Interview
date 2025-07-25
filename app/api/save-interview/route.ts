@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Create interview object
+    const createdAt = new Date().toISOString();
     const interview = {
       role: role,
       type: type,
@@ -97,8 +98,8 @@ export async function POST(request: NextRequest) {
       questions: questions,
       userId: finalUserId,
       finalized: true,
-      coverImage: getRandomInterviewCover(),
-      createdAt: new Date().toISOString(),
+      coverImage: getRandomInterviewCover(`${finalUserId}-${createdAt}`),
+      createdAt: createdAt,
       // Add targeting fields
       targetColleges: targetColleges,
       targetBranches: targetBranches,

@@ -149,7 +149,7 @@ CRITICAL RESPONSE RULES:
 - Do not apologize for candidate misconduct - be firm and professional instead
 - Do not invent or hallucinate any company-specific information
 - Be honest when you don't know specific details about the company or role`,
-  useStreaming: false,
+  useStreaming: true, // 🚀 Enable streaming for optimized performance
 };
 
 export const feedbackSchema = z.object({

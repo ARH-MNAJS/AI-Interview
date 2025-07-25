@@ -1,5 +1,7 @@
 import { SERVICES_CONFIG } from '../config/services';
 import { logger } from './logger';
+import { httpConnectionPool } from './http_pool_manager';
+import { requestQueue, RequestType, RequestPriority } from './request_queue_manager';
 
 export class EdgeTTSClient {
   private baseUrl: string;
@@ -16,49 +18,54 @@ export class EdgeTTSClient {
 
   async synthesize(text: string, voiceId?: string): Promise<ArrayBuffer> {
     const voice = voiceId || this.voiceId;
-    logger.debug('EdgeTTSClient', 'Starting speech synthesis', {
+    logger.debug('EdgeTTSClient', 'Starting speech synthesis with optimized connection pooling', {
       text: text.substring(0, 100) + '...',
       voiceId: voice,
     });
 
-    try {
-      const response = await fetch(`${this.baseUrl}/synthesize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+    // Use request queue to manage TTS concurrency
+    return await requestQueue.enqueueTTSRequest(async () => {
+      logger.debug('EdgeTTSClient', 'Making pooled TTS request', {
+        textLength: text.length,
+        voice
+      });
+
+      // Use HTTP connection pool with optimized timeout
+      const audioBuffer = await httpConnectionPool.post<ArrayBuffer>(
+        `${this.baseUrl}/synthesize`,
+        JSON.stringify({
           text,
           voice: voice,
         }),
-      });
+        {
+          'Content-Type': 'application/json',
+        },
+        8000 // 8 second timeout for TTS
+      );
 
-      if (!response.ok) {
-        throw new Error(`TTS service responded with status: ${response.status}`);
-      }
-
-      const audioBuffer = await response.arrayBuffer();
       logger.info('EdgeTTSClient', 'Speech synthesis completed', {
         audioSize: audioBuffer.byteLength,
         textLength: text.length,
       });
 
       return audioBuffer;
-    } catch (error) {
-      logger.error('EdgeTTSClient', 'Speech synthesis failed', error);
-      throw error;
-    }
+    }, RequestPriority.NORMAL); // Normal priority for TTS synthesis
   }
 
   async testConnection(): Promise<boolean> {
     try {
-      logger.debug('EdgeTTSClient', 'Testing TTS service connection');
-      const response = await fetch(`${this.baseUrl}/health`);
-      const isHealthy = response.ok;
+      logger.debug('EdgeTTSClient', 'Testing TTS service connection with connection pooling');
+      
+      // Use request queue for health checks with low priority
+      const response = await requestQueue.enqueueHealthCheckRequest(async () => {
+        return await httpConnectionPool.get<any>(`${this.baseUrl}/health`, {}, 5000);
+      });
+      
+      const isHealthy = true; // If we got here without throwing, the service is healthy
       
       logger.info('EdgeTTSClient', 'TTS service health check', {
-        status: isHealthy ? 'healthy' : 'unhealthy',
-        statusCode: response.status,
+        status: 'healthy',
+        poolStats: httpConnectionPool.getPoolStats()
       });
 
       return isHealthy;

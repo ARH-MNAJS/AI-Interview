@@ -1,5 +1,7 @@
 import { SERVICES_CONFIG } from '../config/services';
 import { logger } from './logger';
+import { httpConnectionPool } from './http_pool_manager';
+import { requestQueue, RequestType, RequestPriority } from './request_queue_manager';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -40,29 +42,32 @@ export class OllamaLLMAdapter {
   }
 
   async generateResponse(messages: ChatMessage[]): Promise<string> {
-    logger.debug('OllamaLLMAdapter', 'Starting LLM generation', {
+    logger.debug('OllamaLLMAdapter', 'Starting LLM generation with optimized connection pooling', {
       messageCount: messages.length,
       model: this.model,
     });
 
-    try {
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+    // Use request queue to manage LLM concurrency
+    return await requestQueue.enqueueLLMRequest(async () => {
+      logger.debug('OllamaLLMAdapter', 'Making pooled LLM request', {
+        messageCount: messages.length,
+        model: this.model
+      });
+
+      // Use HTTP connection pool with proper timeout for LLM requests
+      const data: ChatResponse = await httpConnectionPool.post<ChatResponse>(
+        `${this.baseUrl}/api/chat`,
+        JSON.stringify({
           model: this.model,
           messages,
           stream: false,
         }),
-      });
+        {
+          'Content-Type': 'application/json',
+        },
+        30000 // 30 second timeout for server-side LLM
+      );
 
-      if (!response.ok) {
-        throw new Error(`Ollama responded with status: ${response.status}`);
-      }
-
-      const data: ChatResponse = await response.json();
       const content = data.message.content;
 
       logger.info('OllamaLLMAdapter', 'LLM generation completed', {
@@ -72,10 +77,7 @@ export class OllamaLLMAdapter {
       });
 
       return content;
-    } catch (error) {
-      logger.error('OllamaLLMAdapter', 'LLM generation failed', error);
-      throw error;
-    }
+    }, RequestPriority.HIGH); // High priority for LLM responses
   }
 
   async *generateStreamingResponse(messages: ChatMessage[]): AsyncGenerator<string, void, unknown> {
@@ -146,26 +148,22 @@ export class OllamaLLMAdapter {
 
   async testConnection(): Promise<boolean> {
     try {
-      logger.debug('OllamaLLMAdapter', 'Testing Ollama service connection');
-      const response = await fetch(`${this.baseUrl}/api/tags`);
-      const isHealthy = response.ok;
+      logger.debug('OllamaLLMAdapter', 'Testing Ollama service connection with connection pooling');
       
-      if (isHealthy) {
-        const data = await response.json();
-        const hasModel = data.models?.some((model: any) => model.name.includes(this.model.split(':')[0]));
-        logger.info('OllamaLLMAdapter', 'Ollama service health check', {
-          status: 'healthy',
-          modelAvailable: hasModel,
-          availableModels: data.models?.map((m: any) => m.name) || [],
-        });
-        return hasModel;
-      } else {
-        logger.info('OllamaLLMAdapter', 'Ollama service health check', {
-          status: 'unhealthy',
-          statusCode: response.status,
-        });
-        return false;
-      }
+      // Use request queue for health checks with low priority
+      const data = await requestQueue.enqueueHealthCheckRequest(async () => {
+        return await httpConnectionPool.get<any>(`${this.baseUrl}/api/tags`, {}, 8000);
+      });
+      
+      const hasModel = data.models?.some((model: any) => model.name.includes(this.model.split(':')[0]));
+      logger.info('OllamaLLMAdapter', 'Ollama service health check', {
+        status: 'healthy',
+        modelAvailable: hasModel,
+        availableModels: data.models?.map((m: any) => m.name) || [],
+        poolStats: httpConnectionPool.getPoolStats()
+      });
+      return hasModel;
+      
     } catch (error) {
       logger.error('OllamaLLMAdapter', 'Ollama service health check failed', error);
       return false;

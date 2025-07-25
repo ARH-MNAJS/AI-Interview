@@ -86,7 +86,7 @@ If you see "Cannot read properties of null (reading 'onAuthStateChanged')":
 
 ### CORS Issues
 
-The app automatically handles CORS by routing Ollama requests through `/api/ollama-proxy`. No additional configuration needed.
+The app now connects directly to your HTTPS Ollama server without any proxy overhead for optimal performance.
 
 ## 📁 Project Structure
 

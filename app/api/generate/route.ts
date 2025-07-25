@@ -134,6 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create interview object with targeting
+    const createdAt = new Date().toISOString();
     const interview = {
       role: role,
       type: type,
@@ -146,8 +147,8 @@ export async function POST(request: NextRequest) {
       questions: parsedQuestions,
       userId: finalUserId,
       finalized: true,
-      coverImage: getRandomInterviewCover(),
-      createdAt: new Date().toISOString(),
+      coverImage: getRandomInterviewCover(`${finalUserId}-${createdAt}`),
+      createdAt: createdAt,
       // Add targeting fields
       targetColleges: targetColleges,
       targetBranches: targetBranches,

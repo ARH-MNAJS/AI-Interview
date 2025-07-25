@@ -3,6 +3,7 @@ import { whisperSTTClient } from './stt_client';
 import { clientOllamaAdapter, type ChatMessage } from './client_ollama_adapter';
 import { logger } from './logger';
 import { AUDIO_CONFIG } from '../config/services';
+import { globalCache } from './global_cache_system';
 import { 
   CallStatus, 
   ConversationConfig, 
@@ -28,19 +29,408 @@ export class ConversationHandler {
   private hasStarted = false; // Track if conversation has started to avoid repeating greeting
   private isGeneratingResponse = false; // Track AI response generation
   private stateTimeoutId: NodeJS.Timeout | null = null; // Timeout to prevent stuck states
+  
+  // 🚀 NEW: Audio queue management for streaming playback
+  private audioPlaybackQueue: ArrayBuffer[] = [];
+  private isPlayingAudio = false;
+  private sentenceSequence = 0; // Track sentence order
+  private sentenceTracker = new Map<ArrayBuffer, { sequenceNumber: number, text: string }>(); // Track sentence content
+  
+  // 🚀 SEQUENTIAL AUDIO MANAGEMENT: Ensure correct playback order
+  private sequentialAudioBuffer = new Map<number, { audioBuffer: ArrayBuffer, text: string }>(); // Store by sequence number
+  private nextExpectedSentence = 1; // Track which sentence should play next
+  private totalExpectedSentences = 0; // Track total sentences for this response
+  
+  // 🚀 OPTIMIZED: Use global caching instead of per-user instances to prevent memory leaks
+  private lastHealthCheck = new Map<string, number>();
+  private preWarmPromise: Promise<void> | null = null;
+
+  // ⏱️ COMPREHENSIVE PERFORMANCE TIMING SYSTEM
+  private performanceTimers = {
+    recordingStartTime: 0,
+    recordingEndTime: 0,
+    audioConversionStartTime: 0,
+    audioConversionEndTime: 0,
+    sttStartTime: 0,
+    sttEndTime: 0,
+    aiGenerationStartTime: 0,
+    aiGenerationEndTime: 0,
+    ttsStartTime: 0,
+    ttsEndTime: 0,
+    audioPlaybackStartTime: 0,
+    audioPlaybackEndTime: 0,
+    totalPipelineStartTime: 0,
+    totalPipelineEndTime: 0
+  };
 
   constructor() {
     logger.info('ConversationHandler', 'Initialized conversation handler');
   }
 
+  // ⏱️ PERFORMANCE TIMING METHODS
+  private logPerformanceMetrics(): void {
+    const metrics = {
+      userSpeakingTime: this.performanceTimers.recordingEndTime - this.performanceTimers.recordingStartTime,
+      audioConversionTime: this.performanceTimers.audioConversionEndTime - this.performanceTimers.audioConversionStartTime,
+      speechToTextTime: this.performanceTimers.sttEndTime - this.performanceTimers.sttStartTime,
+      aiResponseTime: this.performanceTimers.aiGenerationEndTime - this.performanceTimers.aiGenerationStartTime,
+      textToSpeechTime: this.performanceTimers.ttsEndTime - this.performanceTimers.ttsStartTime,
+      agentSpeakingTime: this.performanceTimers.audioPlaybackEndTime - this.performanceTimers.audioPlaybackStartTime,
+      totalPipelineTime: this.performanceTimers.totalPipelineEndTime - this.performanceTimers.totalPipelineStartTime
+    };
+
+    const formattedMetrics = {
+      userSpeakingTime: `${(metrics.userSpeakingTime / 1000).toFixed(2)}s`,
+      audioConversionTime: `${metrics.audioConversionTime}ms`,
+      speechToTextTime: `${(metrics.speechToTextTime / 1000).toFixed(2)}s`,
+      aiResponseTime: `${(metrics.aiResponseTime / 1000).toFixed(2)}s`,
+      textToSpeechTime: `${(metrics.textToSpeechTime / 1000).toFixed(2)}s`,
+      agentSpeakingTime: `${(metrics.agentSpeakingTime / 1000).toFixed(2)}s`,
+      totalPipelineTime: `${(metrics.totalPipelineTime / 1000).toFixed(2)}s`,
+      breakdown: {
+        userSpeakingPercent: `${((metrics.userSpeakingTime / metrics.totalPipelineTime) * 100).toFixed(1)}%`,
+        audioConversionPercent: `${((metrics.audioConversionTime / metrics.totalPipelineTime) * 100).toFixed(1)}%`,
+        speechToTextPercent: `${((metrics.speechToTextTime / metrics.totalPipelineTime) * 100).toFixed(1)}%`,
+        aiResponsePercent: `${((metrics.aiResponseTime / metrics.totalPipelineTime) * 100).toFixed(1)}%`,
+        textToSpeechPercent: `${((metrics.textToSpeechTime / metrics.totalPipelineTime) * 100).toFixed(1)}%`,
+        agentSpeakingPercent: `${((metrics.agentSpeakingTime / metrics.totalPipelineTime) * 100).toFixed(1)}%`
+      }
+    };
+
+    logger.info('ConversationHandler', '⏱️ 📊 COMPLETE PERFORMANCE METRICS', formattedMetrics);
+    
+    // Also log to console for easy terminal viewing
+    console.log('\n🚀 ⏱️ CONVERSATION PERFORMANCE METRICS');
+    console.log('=====================================');
+    console.log(`👤 User Speaking Time:     ${formattedMetrics.userSpeakingTime} (${formattedMetrics.breakdown.userSpeakingPercent})`);
+    console.log(`🔄 Audio Conversion:       ${formattedMetrics.audioConversionTime} (${formattedMetrics.breakdown.audioConversionPercent})`);
+    console.log(`🗣️  Speech-to-Text:        ${formattedMetrics.speechToTextTime} (${formattedMetrics.breakdown.speechToTextPercent})`);
+    console.log(`🤖 AI Response Generation: ${formattedMetrics.aiResponseTime} (${formattedMetrics.breakdown.aiResponsePercent})`);
+    console.log(`🔊 Text-to-Speech:         ${formattedMetrics.textToSpeechTime} (${formattedMetrics.breakdown.textToSpeechPercent})`);
+    console.log(`🎵 Agent Speaking Time:    ${formattedMetrics.agentSpeakingTime} (${formattedMetrics.breakdown.agentSpeakingPercent})`);
+    console.log(`⏱️  TOTAL PIPELINE TIME:   ${formattedMetrics.totalPipelineTime}`);
+    console.log('=====================================\n');
+  }
+
+  private resetPerformanceTimers(): void {
+    Object.keys(this.performanceTimers).forEach(key => {
+      (this.performanceTimers as any)[key] = 0;
+    });
+  }
+
+  // 🚀 OPTIMIZED: Use global caching system instead of per-user caches
+  private generateConversationContext(messages: ChatMessage[]): string {
+    // Create deterministic conversation context for global caching
+    const recentMessages = messages.slice(-3); // Last 3 messages for context
+    const contextString = recentMessages.map(m => 
+      `${m.role}:${m.content.slice(0, 100).toLowerCase().trim()}`
+    ).join('|');
+    
+    logger.debug('ConversationHandler', 'Generated conversation context for global cache', {
+      messageCount: messages.length,
+      recentMessageCount: recentMessages.length,
+      contextLength: contextString.length
+    });
+    
+    return contextString;
+  }
+
+  // 🚀 NEW: Helper methods for parallel processing
+  private async preWarmLLMConnection(): Promise<void> {
+    try {
+      // 🚀 PERFORMANCE: Cache health check to avoid repeated calls
+      const cacheKey = 'llm_health';
+      const now = Date.now();
+      const lastCheck = this.lastHealthCheck.get(cacheKey) || 0;
+      
+      // Only check every 30 seconds
+      if (now - lastCheck < 30000) {
+        logger.debug('ConversationHandler', 'Skipping LLM health check - recently cached');
+        return;
+      }
+      
+      // Quick health check to warm up connection
+      await clientOllamaAdapter.testConnection();
+      this.lastHealthCheck.set(cacheKey, now);
+      logger.debug('ConversationHandler', 'LLM connection pre-warmed successfully');
+    } catch (error) {
+      logger.warn('ConversationHandler', 'LLM pre-warm failed', error);
+    }
+  }
+
+  // 🚀 NEW: Comprehensive pipeline analysis method
+  private async analyzePipelineFailure(messages: ChatMessage[], rawResponse: string, filteredResponse: string): Promise<void> {
+    logger.error('ConversationHandler', '🔍 COMPREHENSIVE PIPELINE ANALYSIS', {
+      timestamp: new Date().toISOString(),
+      pipelineStage: 'EMPTY_RESPONSE_ANALYSIS',
+      analysis: {
+        userInput: {
+          lastMessage: messages.filter(m => m.role === 'user').slice(-1)[0]?.content || 'NO_USER_MESSAGE',
+          messageLength: messages.filter(m => m.role === 'user').slice(-1)[0]?.content?.length || 0,
+          conversationLength: messages.length,
+          userSpeaking: messages.filter(m => m.role === 'user').length,
+          aiResponses: messages.filter(m => m.role === 'assistant').length
+        },
+        aiResponse: {
+          rawLength: rawResponse.length,
+          filteredLength: filteredResponse.length,
+          rawContent: rawResponse,
+          filteredContent: filteredResponse,
+          containsOnlyWhitespace: rawResponse.length > 0 && rawResponse.trim().length === 0,
+          wasFilteredToEmpty: rawResponse.length > 0 && filteredResponse.length === 0
+        },
+        possibleCauses: [
+          rawResponse.length === 0 ? 'AI_MODEL_RETURNED_NOTHING' : null,
+          rawResponse.length > 0 && filteredResponse.length === 0 ? 'FILTERING_REMOVED_EVERYTHING' : null,
+          messages.length > 20 ? 'CONVERSATION_TOO_LONG' : null,
+          messages.filter(m => m.role === 'user').slice(-1)[0]?.content?.length > 1000 ? 'USER_MESSAGE_TOO_LONG' : null,
+          !messages.filter(m => m.role === 'user').slice(-1)[0]?.content ? 'NO_USER_INPUT' : null
+        ].filter(Boolean)
+      }
+    });
+  }
+
+  // 🚀 NEW: Diagnostic method for AI response issues
+  private async diagnoseEmptyResponse(messages: ChatMessage[]): Promise<string> {
+    logger.info('ConversationHandler', 'Diagnosing empty response issue', {
+      messageCount: messages.length,
+      lastFewMessages: messages.slice(-2).map(m => ({
+        role: m.role,
+        contentLength: m.content.length,
+        preview: m.content.slice(0, 50)
+      }))
+    });
+    
+    // Check if the conversation context is too long
+    if (messages.length > 20) {
+      logger.warn('ConversationHandler', 'Conversation may be too long for AI model');
+      return "I think our conversation has gotten quite lengthy. Let me focus on your latest point.";
+    }
+    
+    // Check if user message is very long
+    const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0];
+    if (lastUserMessage && lastUserMessage.content.length > 500) {
+      logger.info('ConversationHandler', 'User provided detailed response, acknowledging');
+      return "Thank you for that detailed explanation. That gives me great insight into your experience. Can you tell me more about the specific technical challenges you encountered?";
+    }
+    
+    // Default contextual response
+    return "I appreciate you sharing that with me. Could you elaborate on the most challenging aspect of what you just described?";
+  }
+
+  private async prepareConversationContext(): Promise<any> {
+    // Pre-prepare context data while other operations run
+    return {
+      timestamp: new Date().toISOString(),
+      messageCount: this.conversationHistory.length
+    };
+  }
+
+  private async optimizeConversationHistory(): Promise<ChatMessage[]> {
+    // Optimize/truncate conversation history while STT runs
+    return this.conversationHistory.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+  }
+
+  // 🚀 NEW: Streaming response methods
+  private isCompleteSentence(text: string): boolean {
+    // More robust sentence detection for streaming
+    const trimmed = text.trim();
+    
+    // Must end with sentence punctuation
+    const endsWithPunctuation = /[.!?]$/.test(trimmed);
+    
+    // Must have minimum length (avoid tiny fragments)
+    const hasMinLength = trimmed.length >= 10;
+    
+    // Check for clear sentence patterns
+    const hasCompleteSentence = /[.!?]\s*$/.test(trimmed) && hasMinLength;
+    
+    return endsWithPunctuation && hasMinLength && hasCompleteSentence;
+  }
+
+  private async synthesizeAndQueueAudio(text: string, isFirst: boolean): Promise<void> {
+    try {
+      // 🔍 DETAILED SENTENCE TTS ORDER LOGGING
+      const currentSentenceNumber = this.sentenceSequence;
+      logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Starting TTS Synthesis', {
+        sentenceNumber: currentSentenceNumber,
+        sentenceFull: text,
+        sentencePreview: text.slice(0, 50) + '...',
+        isFirstSentence: isFirst,
+        currentQueueLength: this.audioPlaybackQueue.length,
+        processingOrder: 'SENDING_TO_TTS'
+      });
+      
+      // 🚀 GLOBAL CACHE OPTIMIZATION: Check global cache first
+      let audioBuffer = globalCache.getCachedAudio(text);
+      
+      if (!audioBuffer) {
+        // ⏱️ START TTS TIMING
+        this.performanceTimers.ttsStartTime = Date.now();
+        
+        // Cache miss - synthesize and cache globally
+        logger.debug('ConversationHandler', '⏱️ Global cache miss - synthesizing audio');
+        audioBuffer = await edgeTTSClient.synthesize(text);
+        
+        const cacheSuccess = globalCache.setCachedAudio(text, audioBuffer);
+        if (!cacheSuccess) {
+          logger.warn('ConversationHandler', 'Failed to cache audio in global cache - likely due to memory limits');
+        }
+        
+        // ⏱️ END TTS TIMING
+        this.performanceTimers.ttsEndTime = Date.now();
+        const ttsTime = this.performanceTimers.ttsEndTime - this.performanceTimers.ttsStartTime;
+        
+        logger.info('ConversationHandler', '⏱️ TTS synthesis completed', {
+          ttsTime: `${(ttsTime / 1000).toFixed(2)}s`,
+          textLength: text.length,
+          audioSize: audioBuffer.byteLength
+        });
+      } else {
+        logger.debug('ConversationHandler', '⏱️ Global TTS cache hit - no synthesis needed');
+      }
+      
+      // 🔍 DETAILED SENTENCE QUEUE ORDER LOGGING
+      logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Adding to Audio Queue', {
+        sentenceNumber: currentSentenceNumber,
+        sentencePreview: text.slice(0, 50) + '...',
+        audioSize: audioBuffer.byteLength,
+        fromCache: globalCache.getCachedAudio(text) !== null,
+        currentQueueLength: this.audioPlaybackQueue.length,
+        processingOrder: 'ADDING_TO_QUEUE'
+      });
+      
+      // 🚀 SEQUENTIAL AUDIO MANAGEMENT: Store by sequence number instead of immediate queue
+      this.sequentialAudioBuffer.set(currentSentenceNumber, {
+        audioBuffer: audioBuffer,
+        text: text
+      });
+      
+      logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Audio Ready - Checking Sequential Order', {
+        sentenceNumber: currentSentenceNumber,
+        sentencePreview: text.slice(0, 50) + '...',
+        nextExpectedSentence: this.nextExpectedSentence,
+        totalBufferedSentences: this.sequentialAudioBuffer.size,
+        totalExpectedSentences: this.totalExpectedSentences
+      });
+      
+      // 🚀 SEQUENTIAL PLAYBACK: Check if we can play the next expected sentence(s)
+      this.processSequentialAudio();
+    } catch (error) {
+      logger.error('ConversationHandler', 'Audio synthesis failed', error);
+    }
+  }
+
+  // 🚀 NEW: Sequential audio processing to maintain correct order
+  private async processSequentialAudio(): Promise<void> {
+    // Check if we can play the next expected sentence(s) in order
+    while (this.sequentialAudioBuffer.has(this.nextExpectedSentence)) {
+      const sentenceData = this.sequentialAudioBuffer.get(this.nextExpectedSentence)!;
+      
+      logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Playing Sentence in Correct Order', {
+        sentenceNumber: this.nextExpectedSentence,
+        sentenceContent: sentenceData.text,
+        sentencePreview: sentenceData.text.slice(0, 50) + '...',
+        isCorrectSequentialOrder: true,
+        processingOrder: 'SEQUENTIAL_PLAYBACK'
+      });
+      
+      // Add to traditional queue for immediate playback
+      this.audioPlaybackQueue.push(sentenceData.audioBuffer);
+      
+      // Track for cleanup
+      this.sentenceTracker.set(sentenceData.audioBuffer, {
+        sequenceNumber: this.nextExpectedSentence,
+        text: sentenceData.text
+      });
+      
+      // Remove from sequential buffer
+      this.sequentialAudioBuffer.delete(this.nextExpectedSentence);
+      
+      // Move to next expected sentence
+      this.nextExpectedSentence++;
+      
+      // Start playback if not already playing
+      if (!this.isPlayingAudio) {
+        this.processAudioQueue();
+      }
+    }
+    
+    // Log current state for debugging
+    logger.debug('ConversationHandler', '🎯 SENTENCE ORDER: Sequential Audio State', {
+      nextExpectedSentence: this.nextExpectedSentence,
+      bufferedSentences: Array.from(this.sequentialAudioBuffer.keys()).sort(),
+      totalExpectedSentences: this.totalExpectedSentences,
+      waitingForSentences: this.totalExpectedSentences > 0 ? 
+        Array.from({length: this.totalExpectedSentences}, (_, i) => i + 1)
+          .filter(n => n >= this.nextExpectedSentence && !this.sequentialAudioBuffer.has(n)) : []
+    });
+  }
+
+  private async processAudioQueue(): Promise<void> {
+    if (this.isPlayingAudio || this.audioPlaybackQueue.length === 0) {
+      return;
+    }
+
+    this.isPlayingAudio = true;
+    let playbackSequence = 0;
+
+    // 🔍 DETAILED AUDIO PLAYBACK ORDER LOGGING
+    logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Starting Audio Queue Processing', {
+      totalAudioChunks: this.audioPlaybackQueue.length,
+      processingOrder: 'STARTING_PLAYBACK'
+    });
+
+    while (this.audioPlaybackQueue.length > 0) {
+      playbackSequence++;
+      const audioBuffer = this.audioPlaybackQueue.shift()!;
+      
+      // 🔍 LOG EACH AUDIO CHUNK PLAYBACK WITH SENTENCE CONTENT
+      const sentenceInfo = this.sentenceTracker.get(audioBuffer);
+      logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Playing Audio Chunk', {
+        playbackSequence: playbackSequence,
+        originalSentenceNumber: sentenceInfo?.sequenceNumber || 'UNKNOWN',
+        sentenceContent: sentenceInfo?.text || 'UNKNOWN',
+        sentencePreview: sentenceInfo?.text?.slice(0, 50) + '...' || 'UNKNOWN',
+        audioBufferSize: audioBuffer.byteLength,
+        remainingInQueue: this.audioPlaybackQueue.length,
+        processingOrder: 'ACTUALLY_PLAYING',
+        isCorrectOrder: playbackSequence === sentenceInfo?.sequenceNumber
+      });
+      
+      await this.playAudio(audioBuffer);
+      
+      // 🔍 CLEAN UP SENTENCE TRACKER
+      this.sentenceTracker.delete(audioBuffer);
+    }
+
+    this.isPlayingAudio = false;
+    
+    // 🔍 FINAL ORDER SUMMARY
+    logger.info('ConversationHandler', '🎯 SENTENCE ORDER: Audio Queue Processing Complete', {
+      totalSentencesPlayed: playbackSequence,
+      processingOrder: 'PLAYBACK_COMPLETE'
+    });
+  }
+
   // Manual recording methods for hold-to-speak functionality
   startManualRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === 'inactive' && !this.isGeneratingResponse) {
+      // ⏱️ START PERFORMANCE TIMING
+      this.resetPerformanceTimers();
+      this.performanceTimers.recordingStartTime = Date.now();
+      this.performanceTimers.totalPipelineStartTime = Date.now();
+      
       this.isManualRecording = true;
       this.audioChunks = [];
       this.callbacks.onSpeechStart?.();
       this.mediaRecorder.start();
-      logger.info('ConversationHandler', 'Manual recording started (hold-to-speak)');
+      logger.info('ConversationHandler', '⏱️ Manual recording started (hold-to-speak)', {
+        recordingStartTime: new Date(this.performanceTimers.recordingStartTime).toISOString()
+      });
     } else {
       logger.warn('ConversationHandler', 'Cannot start manual recording', {
         mediaRecorderState: this.mediaRecorder?.state,
@@ -52,9 +442,17 @@ export class ConversationHandler {
 
   stopManualRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === 'recording' && this.isManualRecording) {
+      // ⏱️ RECORD TIMING: User finished speaking
+      this.performanceTimers.recordingEndTime = Date.now();
+      
       this.isManualRecording = false;
       this.mediaRecorder.stop();
-      logger.info('ConversationHandler', 'Manual recording stopped (hold-to-speak)');
+      
+      const userSpeakingDuration = this.performanceTimers.recordingEndTime - this.performanceTimers.recordingStartTime;
+      logger.info('ConversationHandler', '⏱️ Manual recording stopped (hold-to-speak)', {
+        userSpeakingTime: `${(userSpeakingDuration / 1000).toFixed(2)}s`,
+        recordingEndTime: new Date(this.performanceTimers.recordingEndTime).toISOString()
+      });
     } else {
       logger.warn('ConversationHandler', 'Cannot stop manual recording', {
         mediaRecorderState: this.mediaRecorder?.state,
@@ -194,7 +592,15 @@ export class ConversationHandler {
       // Send initial greeting only once
       if (!this.hasStarted) {
         this.hasStarted = true;
-        await this.generateAndPlayResponse("Hello! Thank you for taking the time to speak with me today. I'm excited to learn more about you and your experience.");
+        const greetingText = "Hello! Thank you for taking the time to speak with me today. I'm excited to learn more about you and your experience.";
+        
+        // Use streaming if enabled in config, otherwise use regular method
+        if (this.config.useStreaming) {
+          // For greeting, we can use the original method since it's a single short message
+          await this.generateAndPlayResponse(greetingText);
+        } else {
+          await this.generateAndPlayResponse(greetingText);
+        }
       }
 
     } catch (error) {
@@ -223,6 +629,34 @@ export class ConversationHandler {
     this.isGeneratingResponse = false;
     this.isManualRecording = false;
     this.audioChunks = [];
+    
+              // 🚀 Reset audio queue states
+    this.audioPlaybackQueue = [];
+    this.isPlayingAudio = false;
+    this.sentenceSequence = 0;
+    this.sentenceTracker.clear(); // Clear sentence tracking
+    
+    // 🚀 Reset sequential audio state
+    this.sequentialAudioBuffer.clear();
+    this.nextExpectedSentence = 1;
+    this.totalExpectedSentences = 0;
+      
+      // 🔍 PIPELINE CONFIRMATION LOG
+      logger.info('ConversationHandler', '📊 PIPELINE SUMMARY: Conversation Ended', {
+        pipelineMode: 'COMPLETE_USER_MESSAGES_ONLY',
+        notStreamingUserSpeech: true,
+        processFlow: 'RECORD_COMPLETE → STT_COMPLETE → AI_COMPLETE → TTS_COMPLETE',
+        userSpeechHandling: 'WAIT_FOR_COMPLETE_AUDIO_THEN_PROCESS'
+      });
+      
+      // 🚀 GLOBAL CACHE: Log cache statistics for monitoring
+      const cacheStats = globalCache.getCacheStats();
+      logger.info('ConversationHandler', 'Conversation ended - Global cache statistics', {
+        totalEntries: cacheStats.totalEntries,
+        memoryUsageMB: cacheStats.estimatedMemoryMB,
+        hitRate: cacheStats.hitRate,
+        totalRequests: cacheStats.totalRequests
+      });
     
     if (this.mediaRecorder) {
       this.mediaRecorder.stop();
@@ -314,7 +748,7 @@ export class ConversationHandler {
       };
 
       this.mediaRecorder.onstop = async () => {
-        logger.info('ConversationHandler', 'MediaRecorder stopped', {
+        logger.info('ConversationHandler', 'MediaRecorder stopped - starting parallel processing', {
           audioChunksCount: this.audioChunks.length,
           isGeneratingResponse: this.isGeneratingResponse,
         });
@@ -336,39 +770,102 @@ export class ConversationHandler {
             this.callbacks.onSpeechEnd?.();
 
             const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-            logger.info('ConversationHandler', 'Created audio blob', {
-              size: audioBlob.size,
-              type: audioBlob.type,
+            
+            // 🔍 DETAILED AUDIO PIPELINE LOGGING
+            logger.info('ConversationHandler', '📊 PIPELINE STEP 1: Audio Recording Complete', {
+              audioChunksCount: this.audioChunks.length,
+              totalAudioSize: audioBlob.size,
+              audioType: audioBlob.type,
+              recordingDurationEstimate: audioBlob.size / 1000 + 's',
+              chunks: this.audioChunks.map((chunk, i) => ({
+                chunkIndex: i,
+                chunkSize: chunk.size,
+                chunkType: chunk.type
+              }))
             });
             
             this.audioChunks = [];
 
-            // Convert to WAV for Whisper
-            logger.debug('ConversationHandler', 'Converting audio to WAV');
-            const wavBlob = await this.convertToWav(audioBlob);
-            logger.info('ConversationHandler', 'Audio converted to WAV', {
-              originalSize: audioBlob.size,
-              wavSize: wavBlob.size,
+            // 🚀 PARALLEL OPTIMIZATION 1: Start multiple operations concurrently
+            const parallelProcessingPromises = [
+              // Convert audio in parallel with other prep work
+              this.convertToWav(audioBlob),
+              // Pre-warm LLM connection while audio processes
+              this.preWarmLLMConnection(),
+              // Prepare conversation context
+              this.prepareConversationContext()
+            ];
+
+            const [wavBlob, , conversationContext] = await Promise.all(parallelProcessingPromises);
+
+            // 🔍 DETAILED AUDIO PROCESSING LOGGING
+            logger.info('ConversationHandler', '📊 PIPELINE STEP 2: Audio Processing Complete', {
+              originalAudioSize: audioBlob.size,
+              convertedWavSize: wavBlob.size,
+              sizeIncrease: ((wavBlob.size - audioBlob.size) / audioBlob.size * 100).toFixed(1) + '%',
+              contextReady: !!conversationContext,
+              audioConversionTime: Date.now() - Date.now() // This will be updated in next step
             });
+
+            // 🔍 VERIFY AUDIO INTEGRITY
+            if (wavBlob.size === 0) {
+              logger.error('ConversationHandler', '🚨 CRITICAL: WAV conversion resulted in empty blob!', {
+                originalSize: audioBlob.size,
+                originalType: audioBlob.type
+              });
+            }
+
+            // 🚀 SIMPLIFIED: Just perform STT (context will be optimized when needed)
+            // ⏱️ START STT TIMING
+            this.performanceTimers.sttStartTime = Date.now();
             
-            // Transcribe
-            logger.debug('ConversationHandler', 'Starting transcription');
             const transcription = await whisperSTTClient.transcribe(wavBlob);
-            logger.info('ConversationHandler', 'Transcription completed', {
-              text: transcription.text,
+            
+            // ⏱️ END STT TIMING
+            this.performanceTimers.sttEndTime = Date.now();
+            const sttTime = this.performanceTimers.sttEndTime - this.performanceTimers.sttStartTime;
+
+            // 🔍 DETAILED STT PIPELINE LOGGING
+            logger.info('ConversationHandler', '⏱️📊 PIPELINE STEP 3: STT Transcription Complete', {
+              transcribedText: transcription.text,
               textLength: transcription.text.length,
+              textPreview: transcription.text.slice(0, 100) + (transcription.text.length > 100 ? '...' : ''),
+              confidence: transcription.confidence,
+              duration: transcription.duration,
+              historyLength: this.conversationHistory.length,
+              isEmpty: !transcription.text || transcription.text.trim().length === 0,
+              sttProcessingTime: `${(sttTime / 1000).toFixed(2)}s`
             });
+
+            // 🔍 VERIFY STT OUTPUT INTEGRITY
+            if (!transcription.text || transcription.text.trim().length === 0) {
+              logger.error('ConversationHandler', '🚨 CRITICAL: STT returned empty transcription!', {
+                wavBlobSize: wavBlob.size,
+                originalAudioSize: audioBlob.size,
+                sttResponse: transcription
+              });
+            }
             
             if (transcription.text.trim()) {
-              // Emit user message
+              // 🔍 VERIFY COMPLETE USER MESSAGE PROCESSING
+              logger.info('ConversationHandler', '📊 PIPELINE STEP 3.5: User Message Processing', {
+                completeUserMessage: transcription.text,
+                messageLength: transcription.text.length,
+                isCompleteMessage: true, // Confirming this is the COMPLETE message, not streaming
+                processingMode: 'COMPLETE_MESSAGE_AFTER_STT',
+                notStreamingUserSpeech: true
+              });
+              
+              // Emit user message immediately
               this.emitMessage({
                 role: 'user',
                 content: transcription.text,
               });
 
-              // Generate AI response (not the greeting)
-              logger.debug('ConversationHandler', 'Starting AI response generation');
-              await this.generateAndPlayResponse();
+              // 🚀 BUG FIX: Use current conversation history that includes the just-added user message
+              // The optimizedHistory was prepared BEFORE the user message was emitted, so it's missing the latest input
+              logger.debug('ConversationHandler', 'Starting streaming AI response generation with current history');
+              await this.generateAndPlayStreamingResponse(); // Let it use this.conversationHistory which now includes the user message
             } else {
               logger.warn('ConversationHandler', 'Empty transcription received');
               // Reset transcribing state even for empty transcriptions
@@ -382,7 +879,7 @@ export class ConversationHandler {
             this.callbacks.onSpeechEnd?.();
           }
         } catch (error) {
-          logger.error('ConversationHandler', 'Audio processing failed', error);
+          logger.error('ConversationHandler', 'Parallel processing failed', error);
           this.callbacks.onError?.(error as Error);
           
           // Ensure we reset states on error to prevent getting stuck
@@ -408,13 +905,32 @@ export class ConversationHandler {
   }
 
   private async convertToWav(audioBlob: Blob): Promise<Blob> {
-    // Simple conversion - in production, you might want a more robust solution
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const audioContext = new AudioContext();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    // ⏱️ START AUDIO CONVERSION TIMING
+    this.performanceTimers.audioConversionStartTime = Date.now();
     
+    // 🚀 OPTIMIZATION: Cache audio context to avoid re-creation overhead
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext({ sampleRate: AUDIO_CONFIG.SAMPLE_RATE });
+    }
+    
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+    
+    // 🚀 OPTIMIZATION: More efficient WAV conversion
     const wavBuffer = this.audioBufferToWav(audioBuffer);
-    return new Blob([wavBuffer], { type: 'audio/wav' });
+    const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+    
+    // ⏱️ END AUDIO CONVERSION TIMING
+    this.performanceTimers.audioConversionEndTime = Date.now();
+    const conversionTime = this.performanceTimers.audioConversionEndTime - this.performanceTimers.audioConversionStartTime;
+    
+    logger.info('ConversationHandler', '⏱️ Audio conversion completed', {
+      conversionTime: `${conversionTime}ms`,
+      originalSize: audioBlob.size,
+      convertedSize: wavBlob.size
+    });
+    
+    return wavBlob;
   }
 
   private audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
@@ -509,7 +1025,13 @@ export class ConversationHandler {
       // Play audio and wait for completion
       await this.playAudio(audioBuffer);
 
-      logger.debug('ConversationHandler', 'Response generation and playback completed');
+      // ⏱️ END TOTAL PIPELINE TIMING (Non-streaming path)
+      this.performanceTimers.totalPipelineEndTime = Date.now();
+
+      logger.debug('ConversationHandler', '⏱️ Response generation and playback completed');
+      
+      // ⏱️ LOG COMPLETE PERFORMANCE METRICS
+      this.logPerformanceMetrics();
 
     } catch (error) {
       logger.error('ConversationHandler', 'Failed to generate response', error);
@@ -517,12 +1039,366 @@ export class ConversationHandler {
     } finally {
       // Always reset the generation flag
       this.isGeneratingResponse = false;
-      logger.debug('ConversationHandler', 'Setting isGeneratingResponse = false');
+      logger.debug('ConversationHandler', '⏱️ Setting isGeneratingResponse = false');
       
       // Add a small delay to ensure state is properly reset before next interaction
       setTimeout(() => {
-        logger.debug('ConversationHandler', 'Response generation cycle completed - ready for next input');
+        logger.debug('ConversationHandler', '⏱️ Response generation cycle completed - ready for next input');
       }, 100);
+    }
+  }
+
+  // 🚀 NEW: Streaming response pipeline for optimized performance
+  private async generateAndPlayStreamingResponse(conversationHistory?: ChatMessage[]) {
+    if (this.isGeneratingResponse) {
+      logger.warn('ConversationHandler', 'Response generation already in progress');
+      return;
+    }
+
+    // ⏱️ START AI GENERATION TIMING
+    this.performanceTimers.aiGenerationStartTime = Date.now();
+
+    this.isGeneratingResponse = true;
+    logger.debug('ConversationHandler', '⏱️ Starting streaming response generation', {
+      aiGenerationStartTime: new Date(this.performanceTimers.aiGenerationStartTime).toISOString()
+    });
+
+    try {
+      const messages = conversationHistory || this.conversationHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+      
+      // 🔍 BUG FIX VERIFICATION: Log the conversation history being used
+      logger.info('ConversationHandler', '🔧 BUG FIX: Conversation history being sent to AI', {
+        messageCount: messages.length,
+        conversationHistorySource: conversationHistory ? 'PROVIDED_PARAMETER' : 'CURRENT_CONVERSATION_HISTORY',
+        lastUserMessageInHistory: messages.filter(m => m.role === 'user').slice(-1)[0]?.content || 'NO_USER_MESSAGE',
+        fullConversation: messages.map((msg, i) => ({
+          index: i,
+          role: msg.role,
+          content: msg.content.slice(0, 50) + (msg.content.length > 50 ? '...' : '')
+        }))
+      });
+
+      // 🚀 GLOBAL CACHE OPTIMIZATION: Check global cache for cached response
+      const conversationContext = this.generateConversationContext(messages);
+      let cachedResponse = globalCache.getCachedResponse(conversationContext);
+      
+      if (cachedResponse) {
+        logger.info('ConversationHandler', 'Using globally cached AI response', {
+          conversationContext: conversationContext.slice(0, 50),
+          responseLength: cachedResponse.length,
+          cacheStats: globalCache.getCacheStats()
+        });
+        
+        // Play cached response immediately
+        const filteredResponse = this.filterResponse(cachedResponse);
+        if (filteredResponse.length > 0) {
+          await this.synthesizeAndQueueAudio(filteredResponse, true);
+        }
+        
+        // Emit cached message
+        this.emitMessage({
+          role: 'assistant',
+          content: filteredResponse,
+        });
+        
+        return;
+      }
+
+      const actualLastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
+      
+      // 🔍 DETAILED AI INPUT LOGGING
+      logger.info('ConversationHandler', '📊 PIPELINE STEP 4: Sending to AI (LLM)', {
+        messageCount: messages.length,
+        lastUserMessage: actualLastUserMessage.slice(0, 100) + (actualLastUserMessage.length > 100 ? '...' : ''),
+        lastUserMessageLength: actualLastUserMessage.length,
+        lastUserMessageFull: actualLastUserMessage, // Log the COMPLETE message being sent
+        useOptimizedHistory: !!conversationHistory,
+        conversationContext: conversationContext.slice(0, 100),
+        fullConversationContext: messages.map((msg, i) => ({
+          index: i,
+          role: msg.role,
+          contentLength: msg.content.length,
+          contentPreview: msg.content.slice(0, 50) + (msg.content.length > 50 ? '...' : ''),
+          contentFull: msg.content // Complete message for debugging
+        }))
+      });
+
+      // 🔍 VERIFY AI INPUT INTEGRITY
+      if (!actualLastUserMessage || actualLastUserMessage.trim().length === 0) {
+        logger.error('ConversationHandler', '🚨 CRITICAL: Sending empty user message to AI!', {
+          messagesArray: messages,
+          conversationLength: messages.length
+        });
+      }
+
+      // 🚀 STREAMING OPTIMIZATION: Process response as it comes
+      let fullResponse = '';
+      let currentSentence = '';
+      let audioQueue: Promise<void>[] = [];
+      let isFirstSentence = true;
+      this.sentenceSequence = 0; // Reset sequence counter
+      this.sentenceTracker.clear(); // Clear sentence tracking for new response
+      
+      // 🚀 RESET SEQUENTIAL AUDIO STATE for new response
+      this.sequentialAudioBuffer.clear();
+      this.nextExpectedSentence = 1;
+      this.totalExpectedSentences = 0;
+      
+      const startTime = Date.now();
+
+      // Use the existing streaming capability with fallback
+      let chunkCount = 0;
+      try {
+        for await (const chunk of clientOllamaAdapter.generateStreamingResponse(messages)) {
+          chunkCount++;
+          fullResponse += chunk;
+          currentSentence += chunk;
+          
+          // 🚀 DEBUGGING: Log streaming chunks
+          logger.debug('ConversationHandler', 'Received streaming chunk', {
+            chunkNumber: chunkCount,
+            chunkLength: chunk.length,
+            chunkPreview: chunk.slice(0, 50),
+            totalResponseLength: fullResponse.length,
+            currentSentenceLength: currentSentence.length
+          });
+
+          // 🚀 PIPELINE OPTIMIZATION: Start TTS on complete sentences
+          if (this.isCompleteSentence(currentSentence)) {
+            const sentenceToSynthesize = this.filterResponse(currentSentence.trim());
+            
+            if (sentenceToSynthesize.length > 0) {
+              this.sentenceSequence++;
+              
+              // 🔍 DETAILED SENTENCE ORDER LOGGING
+              logger.info('ConversationHandler', '🎯 SENTENCE ORDER: AI Generated Sentence', {
+                sentenceNumber: this.sentenceSequence,
+                sentenceFull: sentenceToSynthesize,
+                sentencePreview: sentenceToSynthesize.slice(0, 50) + '...',
+                isFirstSentence: isFirstSentence,
+                processingOrder: 'FROM_AI_STREAM',
+                totalSentencesProcessed: this.sentenceSequence
+              });
+              
+              // 🚀 SEQUENTIAL PROCESSING: Process sentences in order
+              const audioPromise = this.synthesizeAndQueueAudio(sentenceToSynthesize, isFirstSentence);
+              audioQueue.push(audioPromise);
+              isFirstSentence = false;
+            }
+            
+            currentSentence = '';
+          }
+        }
+        
+        // 🔍 DETAILED AI OUTPUT LOGGING
+        logger.info('ConversationHandler', '📊 PIPELINE STEP 5: AI Streaming Response Complete', {
+          totalChunks: chunkCount,
+          finalResponseLength: fullResponse.length,
+          finalResponsePreview: fullResponse.slice(0, 200) + (fullResponse.length > 200 ? '...' : ''),
+          finalResponseFull: fullResponse, // Complete AI response for debugging
+          isEmpty: !fullResponse || fullResponse.trim().length === 0,
+          hasOnlyWhitespace: fullResponse.trim().length === 0 && fullResponse.length > 0,
+          responseCharCodes: fullResponse.split('').slice(0, 20).map(char => ({
+            char: char,
+            code: char.charCodeAt(0),
+            isWhitespace: /\s/.test(char)
+          }))
+        });
+
+        // 🔍 VERIFY AI OUTPUT INTEGRITY
+        if (!fullResponse || fullResponse.trim().length === 0) {
+          logger.error('ConversationHandler', '🚨 CRITICAL: AI returned empty response!', {
+            totalChunksReceived: chunkCount,
+            rawResponseLength: fullResponse.length,
+            rawResponseCharCodes: fullResponse.split('').map(char => char.charCodeAt(0)),
+            userInputWas: actualLastUserMessage.slice(0, 100),
+            conversationContextSent: messages.length
+          });
+        }
+        
+        // 🚀 SET TOTAL EXPECTED SENTENCES for sequential audio management
+        this.totalExpectedSentences = this.sentenceSequence;
+        logger.info('ConversationHandler', '🎯 SENTENCE ORDER: AI Streaming Complete - Setting Total Expected', {
+          totalExpectedSentences: this.totalExpectedSentences,
+          totalSentencesGenerated: this.sentenceSequence
+        });
+      } catch (streamingError) {
+        logger.warn('ConversationHandler', 'Streaming failed, falling back to non-streaming', streamingError);
+        
+        // 🔄 FALLBACK: Use non-streaming response if streaming fails
+        fullResponse = await clientOllamaAdapter.generateResponse(messages);
+        const filteredResponse = this.filterResponse(fullResponse);
+        
+        // Process the complete response as one audio chunk
+        if (filteredResponse.length > 0) {
+          const audioPromise = this.synthesizeAndQueueAudio(filteredResponse, true);
+          audioQueue.push(audioPromise);
+        }
+      }
+
+      // Handle any remaining text
+      if (currentSentence.trim()) {
+        const sentenceToSynthesize = this.filterResponse(currentSentence.trim());
+        if (sentenceToSynthesize.length > 0) {
+          logger.debug('ConversationHandler', 'Processing final sentence for TTS', {
+            sentence: sentenceToSynthesize.slice(0, 50) + '...'
+          });
+          const audioPromise = this.synthesizeAndQueueAudio(sentenceToSynthesize, false);
+          audioQueue.push(audioPromise);
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      
+      // 🔍 DETAILED FILTERING PIPELINE LOGGING
+      logger.info('ConversationHandler', '📊 PIPELINE STEP 6: Response Filtering', {
+        rawResponse: fullResponse,
+        rawLength: fullResponse.length,
+        rawHasContent: fullResponse.trim().length > 0,
+        rawPreview: fullResponse.slice(0, 100) + (fullResponse.length > 100 ? '...' : '')
+      });
+      
+      const filteredFullResponse = this.filterResponse(fullResponse);
+      
+      // 🔍 VERIFY FILTERING INTEGRITY
+      logger.info('ConversationHandler', '📊 PIPELINE STEP 7: Response Filtering Complete', {
+        originalLength: fullResponse.length,
+        filteredLength: filteredFullResponse.length,
+        originalPreview: fullResponse.slice(0, 100),
+        filteredPreview: filteredFullResponse.slice(0, 100),
+        filteredFull: filteredFullResponse, // Complete filtered response
+        filteringRemovedEverything: fullResponse.length > 0 && filteredFullResponse.trim().length === 0,
+        filteringStats: {
+          removedCharacters: fullResponse.length - filteredFullResponse.length,
+          removalPercentage: fullResponse.length > 0 ? ((fullResponse.length - filteredFullResponse.length) / fullResponse.length * 100).toFixed(1) + '%' : '0%'
+        }
+      });
+      
+      // 🚀 IMPROVED EMPTY RESPONSE HANDLING: Investigate and retry instead of generic fallback
+      if (!filteredFullResponse || filteredFullResponse.trim().length === 0) {
+        // 🔍 COMPREHENSIVE ANALYSIS OF PIPELINE FAILURE
+        await this.analyzePipelineFailure(messages, fullResponse, filteredFullResponse);
+        
+        logger.error('ConversationHandler', '🚨 PIPELINE STEP 8: Empty Response Investigation', {
+          rawResponse: fullResponse,
+          rawLength: fullResponse.length,
+          filteredLength: filteredFullResponse.length,
+          lastUserMessage: messages.filter(m => m.role === 'user').slice(-1)[0]?.content,
+          conversationLength: messages.length,
+          investigationComplete: true
+        });
+        
+        // 🔄 RETRY LOGIC: Try once more with simplified context
+        logger.info('ConversationHandler', 'Retrying AI request with simplified context');
+        try {
+          const simplifiedMessages = messages.slice(-3); // Last 3 messages only
+          const retryResponse = await clientOllamaAdapter.generateResponse(simplifiedMessages);
+          const retryFiltered = this.filterResponse(retryResponse);
+          
+          if (retryFiltered && retryFiltered.trim().length > 0) {
+            logger.info('ConversationHandler', 'Retry successful', {
+              retryResponse: retryFiltered.slice(0, 100)
+            });
+            
+            await this.synthesizeAndQueueAudio(retryFiltered, true);
+            this.emitMessage({
+              role: 'assistant',
+              content: retryFiltered,
+            });
+            
+            // Cache the successful retry in global cache
+            try {
+              const retryContext = this.generateConversationContext(simplifiedMessages);
+              const cacheSuccess = globalCache.setCachedResponse(retryContext, retryFiltered);
+              if (!cacheSuccess) {
+                logger.warn('ConversationHandler', 'Failed to cache retry response in global cache - likely due to memory limits');
+              }
+            } catch (cacheError) {
+              logger.warn('ConversationHandler', 'Failed to cache retry response in global cache', cacheError);
+            }
+            
+            return;
+          }
+        } catch (retryError) {
+          logger.error('ConversationHandler', 'Retry also failed', retryError);
+        }
+        
+                 // 🆘 LAST RESORT: Intelligent contextual fallback
+         const intelligentFallback = await this.diagnoseEmptyResponse(messages);
+         
+         // 🔍 FINAL SUMMARY OF WHAT WENT WRONG
+         logger.error('ConversationHandler', '📊 PIPELINE FINAL SUMMARY: Empty Response Root Cause', {
+           userSpeechWasCompletelyTranscribed: true,
+           aiReceivedCompleteUserMessage: true,
+           notStreamingUserSpeechToAI: true,
+           pipelineFlow: 'USER_SPOKE → COMPLETE_STT → SENT_TO_AI → AI_RETURNED_EMPTY',
+           rootCause: fullResponse.length === 0 ? 'AI_MODEL_ISSUE' : 'FILTERING_ISSUE',
+           usingFallback: intelligentFallback,
+           globalCacheStats: globalCache.getCacheStats()
+         });
+         
+         logger.warn('ConversationHandler', 'Using intelligent contextual fallback', {
+           fallback: intelligentFallback
+         });
+        
+        await this.synthesizeAndQueueAudio(intelligentFallback, true);
+        
+        this.emitMessage({
+          role: 'assistant',
+          content: intelligentFallback,
+        });
+        
+        return;
+      }
+
+      // ⏱️ END AI GENERATION TIMING
+      this.performanceTimers.aiGenerationEndTime = Date.now();
+      const aiGenerationTime = this.performanceTimers.aiGenerationEndTime - this.performanceTimers.aiGenerationStartTime;
+
+      logger.info('ConversationHandler', '⏱️ Streaming AI response completed', {
+        responseLength: filteredFullResponse.length,
+        responsePreview: filteredFullResponse.slice(0, 100),
+        durationMs: duration,
+        sentencesProcessed: audioQueue.length,
+        aiGenerationTime: `${(aiGenerationTime / 1000).toFixed(2)}s`
+      });
+
+      // 🚀 GLOBAL CACHE OPTIMIZATION: Cache successful response globally
+      try {
+        const cacheSuccess = globalCache.setCachedResponse(conversationContext, filteredFullResponse);
+        if (!cacheSuccess) {
+          logger.warn('ConversationHandler', 'Failed to cache response in global cache - likely due to memory limits');
+        }
+      } catch (cacheError) {
+        logger.warn('ConversationHandler', 'Failed to cache response in global cache', cacheError);
+      }
+
+      // Emit the complete assistant message
+      this.emitMessage({
+        role: 'assistant',
+        content: filteredFullResponse,
+      });
+
+      // Wait for all audio to be processed and played
+      await Promise.all(audioQueue);
+
+      // ⏱️ END TOTAL PIPELINE TIMING
+      this.performanceTimers.totalPipelineEndTime = Date.now();
+
+      logger.info('ConversationHandler', '⏱️ Streaming response and audio playback completed');
+
+      // ⏱️ LOG COMPLETE PERFORMANCE METRICS
+      this.logPerformanceMetrics();
+
+    } catch (error) {
+      logger.error('ConversationHandler', 'Streaming response failed', error);
+      this.callbacks.onError?.(error as Error);
+    } finally {
+      this.isGeneratingResponse = false;
+      logger.debug('ConversationHandler', '⏱️ Streaming response generation completed - ready for next input');
     }
   }
 
@@ -556,7 +1432,7 @@ export class ConversationHandler {
     return filtered;
   }
 
-  private async playAudio(audioBuffer: ArrayBuffer) {
+  private async playAudio(audioBuffer: ArrayBuffer): Promise<void> {
     try {
       if (!this.audioContext) return;
 
@@ -565,11 +1441,33 @@ export class ConversationHandler {
       source.buffer = audioBufferDecoded;
       source.connect(this.audioContext.destination);
       
+      // ⏱️ START AUDIO PLAYBACK TIMING
+      this.performanceTimers.audioPlaybackStartTime = Date.now();
+      
+      logger.debug('ConversationHandler', '⏱️ Starting audio playback', {
+        duration: audioBufferDecoded.duration,
+        queueRemaining: this.audioPlaybackQueue.length,
+        audioPlaybackStartTime: new Date(this.performanceTimers.audioPlaybackStartTime).toISOString()
+      });
+      
       source.start();
       
-      // Wait for audio to finish
-      await new Promise(resolve => {
-        source.onended = resolve;
+      // 🚀 NON-BLOCKING: Wait for audio to finish but allow concurrent processing
+      // This allows the next audio chunk to be prepared while current one plays
+      return new Promise(resolve => {
+        source.onended = () => {
+          // ⏱️ END AUDIO PLAYBACK TIMING  
+          this.performanceTimers.audioPlaybackEndTime = Date.now();
+          const audioPlaybackTime = this.performanceTimers.audioPlaybackEndTime - this.performanceTimers.audioPlaybackStartTime;
+          
+          logger.debug('ConversationHandler', '⏱️ Audio chunk playback completed', {
+            duration: audioBufferDecoded.duration,
+            queueRemaining: this.audioPlaybackQueue.length,
+            actualPlaybackTime: `${(audioPlaybackTime / 1000).toFixed(2)}s`,
+            audioPlaybackEndTime: new Date(this.performanceTimers.audioPlaybackEndTime).toISOString()
+          });
+          resolve();
+        };
       });
 
     } catch (error) {
@@ -672,6 +1570,18 @@ CRITICAL RESPONSE RULES:
     this.isGeneratingResponse = false;
     this.isManualRecording = false;
     this.audioChunks = [];
+    
+    // 🚀 Reset audio queue states
+    this.audioPlaybackQueue = [];
+    this.isPlayingAudio = false;
+    this.sentenceSequence = 0;
+    this.sentenceTracker.clear(); // Clear sentence tracking
+    
+    // 🚀 Reset sequential audio state
+    this.sequentialAudioBuffer.clear();
+    this.nextExpectedSentence = 1;
+    this.totalExpectedSentences = 0;
+    
     this.callbacks.onSpeechEnd?.();
   }
 

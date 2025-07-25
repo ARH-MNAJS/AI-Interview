@@ -1,5 +1,7 @@
 import { SERVICES_CONFIG } from '../config/services';
 import { logger } from './logger';
+import { httpConnectionPool } from './http_pool_manager';
+import { requestQueue, RequestType, RequestPriority } from './request_queue_manager';
 
 export interface TranscriptionResult {
   text: string;
@@ -18,76 +20,41 @@ export class WhisperSTTClient {
   }
 
   async transcribe(audioBlob: Blob): Promise<TranscriptionResult> {
-    logger.debug('WhisperSTTClient', 'Starting speech transcription', {
+    logger.debug('WhisperSTTClient', 'Starting speech transcription with optimized connection pooling', {
       audioSize: audioBlob.size,
       audioType: audioBlob.type,
     });
 
-    const maxRetries = 3;
-    let lastError: Error | null = null;
+    // Use request queue to manage concurrency and avoid connection exhaustion
+    return await requestQueue.enqueueSTTRequest(async () => {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'audio.wav');
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'audio.wav');
+      logger.debug('WhisperSTTClient', 'Making pooled STT request', {
+        audioSize: audioBlob.size,
+      });
 
-        logger.debug('WhisperSTTClient', `Transcription attempt ${attempt}/${maxRetries}`, {
-          audioSize: audioBlob.size,
-        });
+      // Use HTTP connection pool with optimized timeout (10s instead of 30s)
+      const result = await httpConnectionPool.post<any>(
+        `${this.baseUrl}/transcribe`,
+        formData,
+        {}, // Let browser set Content-Type with boundary for FormData
+        10000 // 10 second timeout
+      );
 
-        // Add timeout and better error handling
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      logger.info('WhisperSTTClient', 'Speech transcription completed', {
+        text: result.text?.substring(0, 100) + (result.text?.length > 100 ? '...' : ''),
+        textLength: result.text?.length || 0,
+        confidence: result.confidence,
+        duration: result.duration,
+      });
 
-        const response = await fetch(`${this.baseUrl}/transcribe`, {
-          method: 'POST',
-          body: formData,
-          signal: controller.signal,
-          headers: {
-            // Don't set Content-Type, let browser set it with boundary for FormData
-          },
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => 'Unknown error');
-          throw new Error(`STT service responded with status: ${response.status}, body: ${errorText}`);
-        }
-
-        const result = await response.json();
-        logger.info('WhisperSTTClient', 'Speech transcription completed', {
-          text: result.text?.substring(0, 100) + (result.text?.length > 100 ? '...' : ''),
-          textLength: result.text?.length || 0,
-          confidence: result.confidence,
-          duration: result.duration,
-          attempt,
-        });
-
-        return {
-          text: result.text || '',
-          confidence: result.confidence,
-          duration: result.duration,
-        };
-      } catch (error) {
-        lastError = error as Error;
-        logger.warn('WhisperSTTClient', `Transcription attempt ${attempt} failed`, {
-          error: lastError.message,
-          attempt,
-          willRetry: attempt < maxRetries,
-        });
-
-        if (attempt < maxRetries) {
-          // Wait before retry (exponential backoff)
-          const waitTime = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
-          logger.debug('WhisperSTTClient', `Waiting ${waitTime}ms before retry`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
-      }
-    }
-
-    logger.error('WhisperSTTClient', 'All transcription attempts failed', lastError);
-    throw lastError || new Error('Transcription failed after all retries');
+      return {
+        text: result.text || '',
+        confidence: result.confidence,
+        duration: result.duration,
+      };
+    }, RequestPriority.HIGH); // High priority for user speech transcription
   }
 
   async transcribeStream(audioChunk: ArrayBuffer): Promise<TranscriptionResult> {
@@ -106,13 +73,18 @@ export class WhisperSTTClient {
 
   async testConnection(): Promise<boolean> {
     try {
-      logger.debug('WhisperSTTClient', 'Testing STT service connection');
-      const response = await fetch(`${this.baseUrl}/health`);
-      const isHealthy = response.ok;
+      logger.debug('WhisperSTTClient', 'Testing STT service connection with connection pooling');
+      
+      // Use request queue for health checks with low priority
+      const response = await requestQueue.enqueueHealthCheckRequest(async () => {
+        return await httpConnectionPool.get<any>(`${this.baseUrl}/health`, {}, 5000);
+      });
+      
+      const isHealthy = true; // If we got here without throwing, the service is healthy
       
       logger.info('WhisperSTTClient', 'STT service health check', {
-        status: isHealthy ? 'healthy' : 'unhealthy',
-        statusCode: response.status,
+        status: 'healthy',
+        poolStats: httpConnectionPool.getPoolStats()
       });
 
       return isHealthy;

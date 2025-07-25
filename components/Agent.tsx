@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useReducer } from "react";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
@@ -23,6 +23,73 @@ enum WarningLevel {
   TERMINATED = 3
 }
 
+// 🚀 PERFORMANCE OPTIMIZATION: State reducer to minimize re-renders
+interface AgentState {
+  callStatus: CallStatus;
+  messages: SavedMessage[];
+  isSpeaking: boolean;
+  lastMessage: string;
+  isRecording: boolean;
+  isTranscribing: boolean;
+  isGenerating: boolean;
+  warningLevel: WarningLevel;
+  isGeneratingFeedback: boolean;
+}
+
+type AgentAction = 
+  | { type: 'SET_CALL_STATUS'; payload: CallStatus }
+  | { type: 'ADD_MESSAGE'; payload: SavedMessage }
+  | { type: 'SET_SPEAKING'; payload: boolean }
+  | { type: 'SET_RECORDING'; payload: boolean }
+  | { type: 'SET_TRANSCRIBING'; payload: boolean }
+  | { type: 'SET_GENERATING'; payload: boolean }
+  | { type: 'INCREMENT_WARNING' }
+  | { type: 'RESET_WARNING' }
+  | { type: 'SET_GENERATING_FEEDBACK'; payload: boolean }
+  | { type: 'RESET_ALL' };
+
+function agentReducer(state: AgentState, action: AgentAction): AgentState {
+  switch (action.type) {
+    case 'SET_CALL_STATUS':
+      return { ...state, callStatus: action.payload };
+    case 'ADD_MESSAGE':
+      const newMessages = [...state.messages, action.payload];
+      return { 
+        ...state, 
+        messages: newMessages,
+        lastMessage: action.payload.content
+      };
+    case 'SET_SPEAKING':
+      return { ...state, isSpeaking: action.payload };
+    case 'SET_RECORDING':
+      return { ...state, isRecording: action.payload };
+    case 'SET_TRANSCRIBING':
+      return { ...state, isTranscribing: action.payload };
+    case 'SET_GENERATING':
+      return { ...state, isGenerating: action.payload };
+    case 'INCREMENT_WARNING':
+      return { ...state, warningLevel: state.warningLevel + 1 };
+    case 'RESET_WARNING':
+      return { ...state, warningLevel: WarningLevel.NONE };
+    case 'SET_GENERATING_FEEDBACK':
+      return { ...state, isGeneratingFeedback: action.payload };
+    case 'RESET_ALL':
+      return {
+        callStatus: CallStatus.INACTIVE,
+        messages: [],
+        isSpeaking: false,
+        lastMessage: "",
+        isRecording: false,
+        isTranscribing: false,
+        isGenerating: false,
+        warningLevel: WarningLevel.NONE,
+        isGeneratingFeedback: false
+      };
+    default:
+      return state;
+  }
+}
+
 const Agent = ({
   userName,
   userId,
@@ -32,15 +99,20 @@ const Agent = ({
   questions,
 }: AgentProps) => {
   const router = useRouter();
-  const [callStatus, setCallStatus] = useState<CallStatus>(CallStatus.INACTIVE);
-  const [messages, setMessages] = useState<SavedMessage[]>([]);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [lastMessage, setLastMessage] = useState<string>("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [warningLevel, setWarningLevel] = useState<WarningLevel>(WarningLevel.NONE);
-  const [isGeneratingFeedback, setIsGeneratingFeedback] = useState(false);
+  
+  // 🚀 PERFORMANCE OPTIMIZATION: Use useReducer to minimize re-renders
+  const [state, dispatch] = useReducer(agentReducer, {
+    callStatus: CallStatus.INACTIVE,
+    messages: [],
+    isSpeaking: false,
+    lastMessage: "",
+    isRecording: false,
+    isTranscribing: false,
+    isGenerating: false,
+    warningLevel: WarningLevel.NONE,
+    isGeneratingFeedback: false
+  });
+  
   const keydownRef = useRef<boolean>(false);
 
   // Function to detect inappropriate content
@@ -62,22 +134,21 @@ const Agent = ({
     return warningIndicators.some(pattern => pattern.test(text));
   };
 
-  // Handle warning system
+  // 🚀 OPTIMIZED: Handle warning system with reduced dependencies
   const handleInappropriateBehavior = useCallback(() => {
-    const newWarningLevel = warningLevel + 1;
-    setWarningLevel(newWarningLevel);
+    dispatch({ type: 'INCREMENT_WARNING' });
 
-    if (newWarningLevel >= WarningLevel.TERMINATED) {
+    if (state.warningLevel + 1 >= WarningLevel.TERMINATED) {
       // Automatically terminate interview
       setTimeout(() => {
         handleDisconnect();
       }, 3000); // Give 3 seconds for the termination message to be heard
     }
-  }, [warningLevel]);
+  }, [state.warningLevel]);
 
-  // Get warning indicator color and text
-  const getWarningIndicator = () => {
-    switch (warningLevel) {
+  // 🚀 OPTIMIZED: Memoize warning indicator to prevent unnecessary recalculations
+  const warningIndicator = useMemo(() => {
+    switch (state.warningLevel) {
       case WarningLevel.FIRST:
         return { color: "bg-yellow-500", text: "Warning 1/2", pulse: "animate-pulse" };
       case WarningLevel.SECOND:
@@ -87,15 +158,12 @@ const Agent = ({
       default:
         return null;
     }
-  };
+  }, [state.warningLevel]);
 
-  // Debug method to reset states if stuck
+  // 🚀 OPTIMIZED: Debug method with single dispatch call
   const debugResetStates = useCallback(() => {
     console.log("🔧 DEBUG: Force resetting all states");
-    setIsRecording(false);
-    setIsTranscribing(false);
-    setIsGenerating(false);
-    setIsSpeaking(false);
+    dispatch({ type: 'RESET_ALL' });
     keydownRef.current = false;
     conversationHandler.resetStates();
   }, []);
@@ -108,39 +176,39 @@ const Agent = ({
     };
   }, [debugResetStates]);
 
-  // Hold-to-speak functionality
+  // 🚀 OPTIMIZED: Hold-to-speak functionality with optimized dependencies
   const startRecording = useCallback(() => {
     console.log("Starting recording attempt...", {
-      callStatus,
-      isTranscribing,
-      isGenerating,
-      isRecording,
+      callStatus: state.callStatus,
+      isTranscribing: state.isTranscribing,
+      isGenerating: state.isGenerating,
+      isRecording: state.isRecording,
       keydownRef: keydownRef.current
     });
     
-    if (callStatus === CallStatus.ACTIVE && !isTranscribing && !isGenerating && !isRecording && warningLevel < WarningLevel.TERMINATED) {
+    if (state.callStatus === CallStatus.ACTIVE && !state.isTranscribing && !state.isGenerating && !state.isRecording && state.warningLevel < WarningLevel.TERMINATED) {
       console.log("✅ Starting recording");
-      setIsRecording(true);
+      dispatch({ type: 'SET_RECORDING', payload: true });
       conversationHandler.startManualRecording();
     } else {
       console.log("❌ Recording blocked:", {
-        callStatus,
-        isTranscribing,
-        isGenerating,
-        isRecording,
-        warningLevel
+        callStatus: state.callStatus,
+        isTranscribing: state.isTranscribing,
+        isGenerating: state.isGenerating,
+        isRecording: state.isRecording,
+        warningLevel: state.warningLevel
       });
     }
-  }, [callStatus, isTranscribing, isGenerating, isRecording, warningLevel]);
+  }, [state.callStatus, state.isTranscribing, state.isGenerating, state.isRecording, state.warningLevel]);
 
   const stopRecording = useCallback(() => {
-    console.log("Stopping recording attempt...", { isRecording });
-    if (isRecording) {
+    console.log("Stopping recording attempt...", { isRecording: state.isRecording });
+    if (state.isRecording) {
       console.log("✅ Stopping recording");
-      setIsRecording(false);
+      dispatch({ type: 'SET_RECORDING', payload: false });
       conversationHandler.stopManualRecording();
     }
-  }, [isRecording]);
+  }, [state.isRecording]);
 
   // Keyboard event handlers
   useEffect(() => {
@@ -177,16 +245,16 @@ const Agent = ({
     };
   }, [startRecording, stopRecording]);
 
-  // Event handlers for conversation
+  // 🚀 OPTIMIZED: Event handlers with single dispatch calls
   useEffect(() => {
     const onCallStart = () => {
       console.log("Conversation started");
-      setCallStatus(CallStatus.ACTIVE);
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.ACTIVE });
     };
 
     const onCallEnd = () => {
       console.log("Conversation ended");
-      setCallStatus(CallStatus.FINISHED);
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.FINISHED });
     };
 
     const onMessage = (message: Message) => {
@@ -204,34 +272,34 @@ const Agent = ({
           handleInappropriateBehavior();
         }
 
-        setMessages((prev) => [...prev, newMessage]);
+        dispatch({ type: 'ADD_MESSAGE', payload: newMessage });
 
         if (message.role === "user") {
           console.log("User message received - starting AI generation");
-          setIsGenerating(true);
-          setIsTranscribing(false);
+          dispatch({ type: 'SET_GENERATING', payload: true });
+          dispatch({ type: 'SET_TRANSCRIBING', payload: false });
         } else if (message.role === "assistant") {
           console.log("Assistant response received - resetting all states");
-          setIsGenerating(false);
-          setIsTranscribing(false);
-          setIsRecording(false);
+          dispatch({ type: 'SET_GENERATING', payload: false });
+          dispatch({ type: 'SET_TRANSCRIBING', payload: false });
+          dispatch({ type: 'SET_RECORDING', payload: false });
         }
       }
     };
 
     const onSpeechStart = () => {
       console.log("Speech started (TTS playing)");
-      setIsSpeaking(true);
+      dispatch({ type: 'SET_SPEAKING', payload: true });
     };
 
     const onSpeechEnd = () => {
       console.log("Speech ended (TTS finished)");
-      setIsSpeaking(false);
+      dispatch({ type: 'SET_SPEAKING', payload: false });
     };
 
     const onError = (error: Error) => {
       console.error("Conversation error:", error);
-      setCallStatus(CallStatus.FINISHED);
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.FINISHED });
     };
 
     conversationHandler.on("call-start", onCallStart);
@@ -252,10 +320,8 @@ const Agent = ({
     };
   }, [handleInappropriateBehavior]);
 
+  // 🚀 OPTIMIZED: Effect with reduced dependencies
   useEffect(() => {
-    if (messages.length > 0) {
-      setLastMessage(messages[messages.length - 1].content);
-    }
 
     const handleGenerateFeedback = async (messages: SavedMessage[]) => {
       console.log("handleGenerateFeedback - client-side");
@@ -306,40 +372,40 @@ const Agent = ({
         }
         
         router.push("/");
-      } finally {
-        setIsGeneratingFeedback(false);
-      }
+              } finally {
+          dispatch({ type: 'SET_GENERATING_FEEDBACK', payload: false });
+        }
     };
 
-    if (callStatus === CallStatus.FINISHED) {
+    if (state.callStatus === CallStatus.FINISHED) {
       if (type === "generate") {
         router.push("/");
       } else {
         // Only generate feedback if there was actual meaningful conversation
         // Check if there are user messages (indicating actual interview interaction)
-        const userMessages = messages.filter(msg => msg.role === "user");
-        const assistantMessages = messages.filter(msg => msg.role === "assistant");
+        const userMessages = state.messages.filter(msg => msg.role === "user");
+        const assistantMessages = state.messages.filter(msg => msg.role === "assistant");
         
         if (userMessages.length > 0 && assistantMessages.length > 1) {
           // There was actual conversation, immediately start generating feedback
           // This prevents the glitch where interview screen shows briefly
-          setIsGeneratingFeedback(true);
-          handleGenerateFeedback(messages);
+          dispatch({ type: 'SET_GENERATING_FEEDBACK', payload: true });
+          handleGenerateFeedback(state.messages);
         } else {
           // No meaningful conversation happened, just go back to home or allow retry
           console.log("No meaningful conversation detected, not generating feedback");
           // Reset call status to allow retry
-          setCallStatus(CallStatus.INACTIVE);
+          dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.INACTIVE });
         }
       }
     }
-  }, [messages, callStatus, feedbackId, interviewId, router, type, userId]);
+  }, [state.messages, state.callStatus, feedbackId, interviewId, router, type, userId]);
 
   const handleCall = async () => {
     try {
       console.log("Starting conversation...");
-      setCallStatus(CallStatus.CONNECTING);
-      setWarningLevel(WarningLevel.NONE); // Reset warning level
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.CONNECTING });
+      dispatch({ type: 'RESET_WARNING' }); // Reset warning level
 
       if (type === "generate") {
         // For generate type, use a default workflow with conversation handler
@@ -421,7 +487,7 @@ IMPORTANT RESPONSE RULES:
       }
     } catch (error) {
       console.error("Failed to start conversation:", error);
-      setCallStatus(CallStatus.FINISHED);
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.FINISHED });
     }
   };
 
@@ -429,37 +495,44 @@ IMPORTANT RESPONSE RULES:
     try {
       console.log("Stopping conversation...");
       await conversationHandler.stop();
-      setCallStatus(CallStatus.FINISHED);
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.FINISHED });
     } catch (error) {
       console.error("Error stopping conversation:", error);
-      setCallStatus(CallStatus.FINISHED);
+      dispatch({ type: 'SET_CALL_STATUS', payload: CallStatus.FINISHED });
     }
   };
 
-  // Get current processing state for UI
-  const getProcessingState = () => {
-    if (isTranscribing) return "Transcribing...";
-    if (isGenerating) return "Generating response...";
+  // 🚀 OPTIMIZED: Memoize processing state and indicators
+  const processingState = useMemo(() => {
+    if (state.isTranscribing) return "Transcribing...";
+    if (state.isGenerating) return "Generating response...";
     return "Hold to Speak";
-  };
+  }, [state.isTranscribing, state.isGenerating]);
 
-  const isAnyProcessing = isTranscribing || isGenerating;
-  const warningIndicator = getWarningIndicator();
+  const isAnyProcessing = useMemo(() => 
+    state.isTranscribing || state.isGenerating, 
+    [state.isTranscribing, state.isGenerating]
+  );
 
-  // Debug logging
-  console.log("Agent render state:", {
-    callStatus,
-    isRecording,
-    isTranscribing,
-    isGenerating,
-    isSpeaking,
-    warningLevel,
-    messagesCount: messages.length,
-    lastMessage: lastMessage ? lastMessage.slice(0, 50) + "..." : "No message"
-  });
+  // 🚀 OPTIMIZED: Debug logging with memoization to reduce log spam
+  const debugInfo = useMemo(() => ({
+    callStatus: state.callStatus,
+    isRecording: state.isRecording,
+    isTranscribing: state.isTranscribing,
+    isGenerating: state.isGenerating,
+    isSpeaking: state.isSpeaking,
+    warningLevel: state.warningLevel,
+    messagesCount: state.messages.length,
+    lastMessage: state.lastMessage ? state.lastMessage.slice(0, 50) + "..." : "No message"
+  }), [state]);
+
+  // Only log on state changes, not every render
+  useEffect(() => {
+    console.log("Agent state changed:", debugInfo);
+  }, [debugInfo]);
 
   // Show feedback generation loader
-  if (isGeneratingFeedback) {
+  if (state.isGeneratingFeedback) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-gray-900 z-50">
         <div className="flex flex-col items-center justify-center space-y-8 p-8">
@@ -505,7 +578,7 @@ IMPORTANT RESPONSE RULES:
               height={54}
               className="object-cover"
             />
-            {isSpeaking && <span className="animate-speak" />}
+            {state.isSpeaking && <span className="animate-speak" />}
           </div>
           <h3>AI Interviewer</h3>
         </div>
@@ -522,19 +595,19 @@ IMPORTANT RESPONSE RULES:
             />
             <h3>{userName}</h3>
             {/* Recording indicator */}
-            {isRecording && (
+            {state.isRecording && (
               <div className="flex items-center gap-2 mt-2">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                 <span className="text-sm text-red-500 font-medium">Recording...</span>
               </div>
             )}
-            {isTranscribing && (
+            {state.isTranscribing && (
               <div className="flex items-center gap-2 mt-2">
                 <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
                 <span className="text-sm text-blue-500 font-medium">Transcribing...</span>
               </div>
             )}
-            {isGenerating && (
+            {state.isGenerating && (
               <div className="flex items-center gap-2 mt-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-sm text-green-500 font-medium">Generating...</span>
@@ -545,17 +618,17 @@ IMPORTANT RESPONSE RULES:
       </div>
 
       {/* Transcript Section - Always show when there are messages */}
-      {messages.length > 0 && lastMessage && (
+      {state.messages.length > 0 && state.lastMessage && (
         <div className="transcript-border">
           <div className="transcript">
             <p
-              key={lastMessage}
+              key={state.lastMessage}
               className={cn(
                 "transition-opacity duration-500 opacity-0",
                 "animate-fadeIn opacity-100"
               )}
             >
-              {lastMessage}
+              {state.lastMessage}
             </p>
           </div>
         </div>
@@ -565,20 +638,20 @@ IMPORTANT RESPONSE RULES:
       <div className="w-full flex flex-col items-center gap-4">
         {/* Call Status Debug */}
         <div className="text-xs text-gray-400 mb-2">
-          Status: {callStatus} | Recording: {isRecording ? 'Yes' : 'No'} | Transcribing: {isTranscribing ? 'Yes' : 'No'} | Generating: {isGenerating ? 'Yes' : 'No'} | Warnings: {warningLevel}/2
+          Status: {state.callStatus} | Recording: {state.isRecording ? 'Yes' : 'No'} | Transcribing: {state.isTranscribing ? 'Yes' : 'No'} | Generating: {state.isGenerating ? 'Yes' : 'No'} | Warnings: {state.warningLevel}/2
         </div>
         
-        {callStatus !== CallStatus.ACTIVE ? (
+        {state.callStatus !== CallStatus.ACTIVE ? (
           <button className="relative btn-call" onClick={() => handleCall()}>
             <span
               className={cn(
                 "absolute animate-ping rounded-full opacity-75",
-                callStatus !== CallStatus.CONNECTING && "hidden"
+                state.callStatus !== CallStatus.CONNECTING && "hidden"
               )}
             />
 
             <span className="relative text-black">
-              {callStatus === CallStatus.INACTIVE || callStatus === CallStatus.FINISHED
+              {state.callStatus === CallStatus.INACTIVE || state.callStatus === CallStatus.FINISHED
                 ? "Start Interview"
                 : "Connecting..."}
             </span>
@@ -591,23 +664,23 @@ IMPORTANT RESPONSE RULES:
               <button
                 className={cn(
                   "relative transition-all duration-200 flex items-center justify-center rounded-full w-36 h-12 border-0",
-                  isRecording 
+                  state.isRecording 
                     ? "bg-red-500 hover:bg-red-600 scale-110 shadow-lg" 
-                    : isTranscribing 
+                    : state.isTranscribing 
                       ? "bg-blue-500 hover:bg-blue-600"
-                      : isGenerating
+                      : state.isGenerating
                         ? "bg-green-500 hover:bg-green-600"
                         : "bg-blue-500 hover:bg-blue-600",
-                  (isAnyProcessing || warningLevel >= WarningLevel.TERMINATED) && "opacity-50 cursor-not-allowed"
+                  (isAnyProcessing || state.warningLevel >= WarningLevel.TERMINATED) && "opacity-50 cursor-not-allowed"
                 )}
                 onMouseDown={startRecording}
                 onMouseUp={stopRecording}
                 onMouseLeave={stopRecording}
                 onTouchStart={startRecording}
                 onTouchEnd={stopRecording}
-                disabled={isAnyProcessing || warningLevel >= WarningLevel.TERMINATED}
+                disabled={isAnyProcessing || state.warningLevel >= WarningLevel.TERMINATED}
               >
-                {warningLevel >= WarningLevel.TERMINATED ? (
+                {state.warningLevel >= WarningLevel.TERMINATED ? (
                   <span className="relative z-10 font-medium text-xs px-2 text-center">
                     Terminated
                   </span>
@@ -634,7 +707,7 @@ IMPORTANT RESPONSE RULES:
 
             {/* Instructions */}
             <p className="text-xs text-gray-500 text-center max-w-md">
-              {warningLevel >= WarningLevel.TERMINATED 
+              {state.warningLevel >= WarningLevel.TERMINATED 
                 ? "This interview has been terminated due to inappropriate behavior."
                 : "Hold the button above or press and hold SPACEBAR to speak"
               }

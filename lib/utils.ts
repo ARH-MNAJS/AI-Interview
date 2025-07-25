@@ -41,7 +41,19 @@ export const getTechLogos = async (techArray: string[]) => {
   return results;
 };
 
-export const getRandomInterviewCover = () => {
-  const randomIndex = Math.floor(Math.random() * interviewCovers.length);
-  return `/covers${interviewCovers[randomIndex]}`;
+export const getRandomInterviewCover = (seed?: string) => {
+  if (seed) {
+    // Deterministic selection based on seed to prevent hydration mismatch
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      const char = seed.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    const index = Math.abs(hash) % interviewCovers.length;
+    return `/covers${interviewCovers[index]}`;
+  }
+  
+  // Fallback to first cover for consistency during SSR
+  return `/covers${interviewCovers[0]}`;
 };
