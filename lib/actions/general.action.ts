@@ -395,7 +395,7 @@ export async function getFeedbackById(feedbackId: string): Promise<Feedback | nu
     
     return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
   } catch (error) {
-    console.error("Error fetching feedback by ID:", error);
+    // console.error("Error fetching feedback by ID:", error);
     return null;
   }
 }
@@ -405,7 +405,7 @@ export async function getInterviewsForStudent(userId: string): Promise<Interview
   try {
     // Validate userId
     if (!userId || userId.trim() === '') {
-      console.warn('getInterviewsForStudent called with invalid userId:', userId);
+      // console.warn('getInterviewsForStudent called with invalid userId:', userId);
       return [];
     }
 
@@ -451,7 +451,7 @@ export async function getInterviewsForStudent(userId: string): Promise<Interview
     })) as Interview[];
 
   } catch (error) {
-    console.error("Error fetching interviews for student:", error);
+    // console.error("Error fetching interviews for student:", error);
     return [];
   }
 }
@@ -462,158 +462,163 @@ export async function getInterviewsWithFilters(
   userId?: string
 ): Promise<Interview[] | null> {
   try {
-    console.log("🔍 getInterviewsWithFilters called with:", {
-      filters,
-      userId
-    });
+    // console.log("🔍 getInterviewsWithFilters called with:", {
+    //   filters,
+    //   userId
+    // });
     
     // Also log to console.error to make it more visible
-    console.error("DEBUG: getInterviewsWithFilters called with filters:", JSON.stringify(filters));
+    // console.error("DEBUG: getInterviewsWithFilters called with filters:", JSON.stringify(filters));
 
     let query = db.collection("interviews").where("finalized", "==", true);
     
     // Exclude user's own interviews if userId provided
     if (userId) {
       query = query.where("userId", "!=", userId);
-      console.log("👤 Excluding interviews from user:", userId);
+      // console.log("👤 Excluding interviews from user:", userId);
     }
 
-    console.log("📡 Executing database query...");
+    // console.log("📡 Executing database query...");
     const interviews = await query.orderBy("createdAt", "desc").get();
-    console.log("📊 Total interviews from DB:", interviews.docs.length);
-    console.error("DEBUG: Total interviews from DB:", interviews.docs.length);
+    // console.log("📊 Total interviews from DB:", interviews.docs.length);
+    // console.error("DEBUG: Total interviews from DB:", interviews.docs.length);
 
     // Log sample interview data to understand structure
     if (interviews.docs.length > 0) {
       const sampleInterview = interviews.docs[0].data() as Interview;
-      console.log("📝 Sample interview structure:", {
-        id: interviews.docs[0].id,
-        targetColleges: sampleInterview.targetColleges,
-        targetBranches: sampleInterview.targetBranches,
-        targetYears: sampleInterview.targetYears,
-        role: sampleInterview.role,
-        type: sampleInterview.type
-      });
+      // console.log("📝 Sample interview structure:", {
+      //   id: interviews.docs[0].id,
+      //   targetColleges: sampleInterview.targetColleges,
+      //   targetBranches: sampleInterview.targetBranches,
+      //   targetYears: sampleInterview.targetYears,
+      //   role: sampleInterview.role,
+      //   type: sampleInterview.type
+      // });
     }
 
-    // Filter based on college/branch/year
-    const filteredInterviews = interviews.docs.filter(doc => {
-      const interview = doc.data() as Interview;
+    // Convert to typed interview objects and filter
+    const filteredInterviews: Interview[] = [];
+    
+    for (const doc of interviews.docs) {
+      const interview = { id: doc.id, ...doc.data() } as Interview;
       
-      console.log(`🔍 Checking interview ${doc.id}:`, {
-        targetColleges: interview.targetColleges,
-        targetBranches: interview.targetBranches,
-        targetYears: interview.targetYears
-      });
+      // Check targeting filters
+      let matchesFilter = true;
       
-      if (filters.college && interview.targetColleges) {
-        const collegeMatch = interview.targetColleges.includes(filters.college);
-        console.log(`  College filter (${filters.college}):`, collegeMatch);
-        if (!collegeMatch) return false;
+      // Check if interview targets the user's college
+      if (filters.collegeIds && filters.collegeIds.length > 0) {
+        const hasMatchingCollege = interview.targetColleges?.some(
+          collegeId => filters.collegeIds!.includes(collegeId)
+        );
+        if (!hasMatchingCollege) {
+          matchesFilter = false;
+        }
       }
       
-      if (filters.branch && interview.targetBranches) {
-        const branchMatch = interview.targetBranches.includes(filters.branch);
-        console.log(`  Branch filter (${filters.branch}):`, branchMatch);
-        if (!branchMatch) return false;
+      // Check if interview targets the user's branch
+      if (matchesFilter && filters.branches && filters.branches.length > 0) {
+        const hasMatchingBranch = interview.targetBranches?.some(
+          branch => filters.branches!.includes(branch)
+        );
+        if (!hasMatchingBranch) {
+          matchesFilter = false;
+        }
       }
       
-      if (filters.year && interview.targetYears) {
-        const yearNum = parseInt(filters.year);
-        const yearMatch = interview.targetYears.includes(yearNum);
-        console.log(`  Year filter (${filters.year} -> ${yearNum}):`, yearMatch, "in", interview.targetYears);
-        if (!yearMatch) return false;
+      // Check if interview targets the user's year
+      if (matchesFilter && filters.years && filters.years.length > 0) {
+        const hasMatchingYear = interview.targetYears?.some(
+          year => filters.years!.includes(year)
+        );
+        if (!hasMatchingYear) {
+          matchesFilter = false;
+        }
       }
       
-      console.log(`  ✅ Interview ${doc.id} matches all filters`);
-      return true;
-    });
+      if (matchesFilter) {
+        filteredInterviews.push(interview);
+      }
+    }
 
-    console.log("🎯 Filtered interviews count:", filteredInterviews.length);
-    console.error("DEBUG: Final filtered count:", filteredInterviews.length);
+    // console.log("🎯 Filtered interviews:", {
+    //   total: interviews.docs.length,
+    //   filtered: filteredInterviews.length,
+    //   filters: filters
+    // });
+    // console.error("DEBUG: Filtered interviews count:", filteredInterviews.length);
 
-    return filteredInterviews.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Interview[];
-
+    return filteredInterviews;
+    
   } catch (error) {
-    console.error("💥 Error fetching interviews with filters:", error);
-    return [];
+    // console.error("❌ Error getting interviews with filters:", error);
+    return null;
   }
 }
 
-// Function to get all attempts for a specific interview (for reports)
+// Function to get interview attempts for analysis
 export async function getInterviewAttempts(interviewId: string): Promise<StudentFeedbackData[]> {
   try {
-    console.log("🔍 [getInterviewAttempts] Starting with interviewId:", interviewId);
+    // console.log("🔍 [getInterviewAttempts] Starting with interviewId:", interviewId);
     
-    const feedbackSnapshot = await db
+    const feedbackQuery = await db
       .collection("feedback")
       .where("interviewId", "==", interviewId)
       .orderBy("createdAt", "desc")
       .get();
 
-    console.log("📊 [getInterviewAttempts] Raw feedback from DB:", {
-      interviewId,
-      feedbackCount: feedbackSnapshot.docs.length,
-      feedbacks: feedbackSnapshot.docs.map(doc => ({
-        id: doc.id,
-        userId: doc.data().userId,
-        totalScore: doc.data().totalScore,
-        createdAt: doc.data().createdAt
-      }))
-    });
+    // console.log("📊 [getInterviewAttempts] Found feedback documents:", feedbackQuery.docs.length);
 
     const attempts: StudentFeedbackData[] = [];
 
-    for (const feedbackDoc of feedbackSnapshot.docs) {
-      const feedback = feedbackDoc.data();
+    for (const feedbackDoc of feedbackQuery.docs) {
+      const feedbackData = feedbackDoc.data() as any;
       
-      console.log(`🔍 [getInterviewAttempts] Processing feedback ${feedbackDoc.id} for user:`, feedback.userId);
+      // console.log("📝 [getInterviewAttempts] Processing feedback:", {
+      //   feedbackId: feedbackDoc.id,
+      //   userId: feedbackData.userId,
+      //   createdAt: feedbackData.createdAt
+      // });
+
+      // Get user data
+      let studentName = "Unknown Student";
+      let studentCollege = "Unknown College";
+      let studentBranch = "Unknown Branch";
+      let studentYear: number | undefined;
       
-      // Get student details
-      const userDoc = await db.collection("users").doc(feedback.userId).get();
-      if (userDoc.exists) {
-        const userData = userDoc.data() as User;
-        
-        console.log(`✅ [getInterviewAttempts] Found user data for ${feedback.userId}:`, {
-          name: userData.name,
-          email: userData.email,
-          college: userData.college,
-          branch: userData.branch,
-          year: userData.year
-        });
-        
-        attempts.push({
-          feedbackId: feedbackDoc.id,
-          studentName: userData.name,
-          studentEmail: userData.email,
-          totalScore: feedback.totalScore,
-          attemptDate: feedback.createdAt,
-          college: userData.college || "N/A",
-          branch: userData.branch || "N/A",
-          year: userData.year || "N/A",
-        });
-      } else {
-        console.warn(`❌ [getInterviewAttempts] User document not found for userId:`, feedback.userId);
+      if (feedbackData.userId) {
+        try {
+          const userDoc = await db.collection("users").doc(feedbackData.userId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            studentName = userData?.name || "Unknown Student";
+            studentCollege = userData?.college || "Unknown College";
+            studentBranch = userData?.branch || "Unknown Branch";
+            studentYear = userData?.year;
+          }
+        } catch (userError) {
+          // console.warn("[getInterviewAttempts] Error fetching user data:", userError);
+        }
       }
+
+      attempts.push({
+        feedbackId: feedbackDoc.id,
+        studentName,
+        studentCollege,
+        studentBranch,
+        studentYear,
+        totalScore: feedbackData.totalScore || 0,
+        categoryScores: feedbackData.categoryScores || {},
+        completedAt: feedbackData.createdAt,
+        strengths: feedbackData.strengths || [],
+        areasForImprovement: feedbackData.areasForImprovement || []
+      });
     }
 
-    console.log("🎯 [getInterviewAttempts] Final attempts result:", {
-      interviewId,
-      attemptCount: attempts.length,
-      attempts: attempts.map(a => ({
-        feedbackId: a.feedbackId,
-        studentName: a.studentName,
-        college: a.college,
-        totalScore: a.totalScore
-      }))
-    });
-
+    // console.log("✅ [getInterviewAttempts] Returning attempts:", attempts.length);
     return attempts;
+    
   } catch (error) {
-    console.error("❌ [getInterviewAttempts] Error fetching interview attempts:", error);
+    // console.error("❌ [getInterviewAttempts] Error:", error);
     return [];
   }
 }
@@ -623,88 +628,70 @@ export async function getInterviewsForTPO(params: TPOReportParams): Promise<Inte
   try {
     const { collegeId, branch, year } = params;
     
-    console.log("🔍 [getInterviewsForTPO] Starting with params:", { collegeId, branch, year });
+    // console.log("🔍 [getInterviewsForTPO] Starting with params:", { collegeId, branch, year });
     
     let query = db
       .collection("interviews")
       .where("finalized", "==", true)
       .where("targetColleges", "array-contains", collegeId);
 
-    console.log("📡 [getInterviewsForTPO] Executing Firestore query with targetColleges array-contains:", collegeId);
+    // console.log("📡 [getInterviewsForTPO] Executing Firestore query with targetColleges array-contains:", collegeId);
 
     const interviews = await query.orderBy("createdAt", "desc").get();
 
-    console.log("📊 [getInterviewsForTPO] Raw interviews from DB:", {
-      count: interviews.docs.length,
-      collegeId,
-      interviews: interviews.docs.map(doc => {
-        const data = doc.data() as Interview;
-        return {
-          id: doc.id,
-          role: data.role,
-          targetColleges: data.targetColleges,
-          targetBranches: data.targetBranches,
-          targetYears: data.targetYears,
-          createdAt: data.createdAt
-        };
-      })
-    });
+    // console.log("📊 [getInterviewsForTPO] Raw interviews from DB:", {
+    //   count: interviews.docs.length,
+    //   collegeId,
+    //   interviews: interviews.docs.map(doc => {
+    //     const data = doc.data() as Interview;
+    //     return {
+    //       id: doc.id,
+    //       role: data.role,
+    //       targetColleges: data.targetColleges,
+    //       targetBranches: data.targetBranches,
+    //       targetYears: data.targetYears,
+    //       createdAt: data.createdAt
+    //     };
+    //   })
+    // });
 
-    // Filter by branch and year if specified
-    const filteredInterviews = interviews.docs.filter(doc => {
-      const interview = doc.data() as Interview;
-      
-      console.log(`🔍 [getInterviewsForTPO] Filtering interview ${doc.id}:`, {
-        targetBranches: interview.targetBranches,
-        targetYears: interview.targetYears,
-        filterBranch: branch,
-        filterYear: year
-      });
-      
-      if (branch && interview.targetBranches && !interview.targetBranches.includes(branch)) {
-        console.log(`❌ [getInterviewsForTPO] Interview ${doc.id} excluded by branch filter`);
-        return false;
-      }
-      
-      if (year && interview.targetYears && !interview.targetYears.includes(parseInt(year))) {
-        console.log(`❌ [getInterviewsForTPO] Interview ${doc.id} excluded by year filter`);
-        return false;
-      }
-      
-      console.log(`✅ [getInterviewsForTPO] Interview ${doc.id} passed all filters`);
-      return true;
-    });
-
-    console.log("🎯 [getInterviewsForTPO] Final filtered result:", {
-      originalCount: interviews.docs.length,
-      filteredCount: filteredInterviews.length,
-      collegeId,
-      branch,
-      year
-    });
-
-    const result = filteredInterviews.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Interview[];
-
-    console.log("📤 [getInterviewsForTPO] Returning interviews:", result.length);
-    return result;
-
-  } catch (error) {
-    console.error("❌ [getInterviewsForTPO] Error fetching interviews for TPO:", error);
+    // Filter by branch and year if provided
+    const filteredInterviews: Interview[] = [];
     
-    // Check if it's a composite index error
-    if (error && typeof error === 'object' && 'code' in error) {
-      const firebaseError = error as any;
-      if (firebaseError.code === 9 || firebaseError.message?.includes('index')) {
-        console.error("🚨 [getInterviewsForTPO] COMPOSITE INDEX ERROR - You need to create a Firestore composite index!");
-        console.error("🔗 Index needed for: finalized (==) + targetColleges (array-contains) + createdAt (desc)");
-        console.error("📝 Go to Firebase Console > Firestore > Indexes to create it");
+    for (const doc of interviews.docs) {
+      const interview = { id: doc.id, ...doc.data() } as Interview;
+      let includeInterview = true;
+      
+      // Filter by branch if specified
+      if (branch && interview.targetBranches) {
+        if (!interview.targetBranches.includes(branch)) {
+          includeInterview = false;
+        }
+      }
+      
+      // Filter by year if specified
+      if (includeInterview && year && interview.targetYears) {
+        if (!interview.targetYears.includes(year)) {
+          includeInterview = false;
+        }
+      }
+      
+      if (includeInterview) {
+        filteredInterviews.push(interview);
       }
     }
+
+    // console.log("🎯 [getInterviewsForTPO] Filtered interviews:", {
+    //   originalCount: interviews.docs.length,
+    //   filteredCount: filteredInterviews.length,
+    //   filters: { collegeId, branch, year }
+    // });
+
+    return filteredInterviews;
     
-    return [];
+  } catch (error) {
+    // console.error("❌ [getInterviewsForTPO] Error:", error);
+    return null;
   }
 }
 
@@ -733,7 +720,7 @@ export async function getInterviewsByUserId(
 ): Promise<Interview[] | null> {
   // Validate userId
   if (!userId || userId.trim() === '') {
-    console.warn('getInterviewsByUserId called with invalid userId:', userId);
+    // console.warn('getInterviewsByUserId called with invalid userId:', userId);
     return [];
   }
 

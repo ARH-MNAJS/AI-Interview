@@ -245,16 +245,16 @@ const GeneratePage = () => {
 
   const fetchColleges = async () => {
     try {
-      console.log("🏫 Fetching colleges...");
+      // console.log("🏫 Fetching colleges...");
       const response = await fetch("/api/colleges");
       const result = await response.json();
-      console.log("🏫 Colleges API response:", result);
+      // console.log("🏫 Colleges API response:", result);
       if (result.success) {
-        console.log("🏫 Colleges data:", result.data);
+        // console.log("🏫 Colleges data:", result.data);
         setColleges(result.data);
       }
     } catch (error) {
-      console.error("💥 Error fetching colleges:", error);
+      // console.error("💥 Error fetching colleges:", error);
     }
   };
 
@@ -305,8 +305,8 @@ const GeneratePage = () => {
       return;
     }
 
-    console.log("🔍 Fetching interviews with filters:", tableFilters);
-    console.log("👤 User ID:", user?.uid);
+    // console.log("🔍 Fetching interviews with filters:", tableFilters);
+    // console.log("👤 User ID:", user?.uid);
 
     try {
       const params = new URLSearchParams({
@@ -317,34 +317,34 @@ const GeneratePage = () => {
         ...(tableFilters.year && { year: tableFilters.year }),
       });
 
-      console.log("📤 Request URL:", `/api/interviews?${params.toString()}`);
-      console.log("📋 Request params:", Object.fromEntries(params.entries()));
+      // console.log("📤 Request URL:", `/api/interviews?${params.toString()}`);
+      // console.log("📋 Request params:", Object.fromEntries(params.entries()));
 
       const response = await fetch(`/api/interviews?${params}`);
-      console.log("📥 Response status:", response.status);
-      console.log("📥 Response headers:", Object.fromEntries(response.headers.entries()));
+      // console.log("📥 Response status:", response.status);
+      // console.log("📥 Response headers:", Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        console.error("❌ HTTP Error:", response.status, response.statusText);
+        // console.error("❌ HTTP Error:", response.status, response.statusText);
         const errorText = await response.text();
-        console.error("❌ Error response body:", errorText);
+        // console.error("❌ Error response body:", errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
-      console.log("📊 API Response:", result);
+      // console.log("📊 API Response:", result);
       
       if (result.success) {
-        console.log("✅ Interviews fetched successfully:", result.data?.length || 0, "interviews");
-        console.log("📝 Interview data:", result.data);
+        // console.log("✅ Interviews fetched successfully:", result.data?.length || 0, "interviews");
+        // console.log("📝 Interview data:", result.data);
         setInterviews(result.data || []);
         setShowTable(true);
       } else {
-        console.error("❌ API returned error:", result.error);
+        // console.error("❌ API returned error:", result.error);
         toast.error("Failed to fetch interviews");
       }
     } catch (error) {
-      console.error("💥 Error fetching interviews:", error);
+      // console.error("💥 Error fetching interviews:", error);
       toast.error("Failed to fetch interviews");
     }
   };
@@ -399,10 +399,10 @@ const GeneratePage = () => {
   };
 
   const onSubmit = async (data: GenerateFormData) => {
-    console.log("Form submitted with data:", data);
+    // console.log("Form submitted with data:", data);
     
     if (!isAuthorized || !user) {
-      console.error("Unauthorized: isAuthorized =", isAuthorized, "user =", user);
+      // console.error("Unauthorized: isAuthorized =", isAuthorized, "user =", user);
       toast.error("Unauthorized access");
       return;
     }
@@ -419,7 +419,7 @@ const GeneratePage = () => {
 
       // Step 2: Generate questions using client-side Ollama call
       toast.info("Generating interview questions...");
-      console.log("Calling Ollama directly from browser...");
+      // console.log("Calling Ollama directly from browser...");
       
       const prompt = `Prepare questions for a job interview.
         The job role is ${data.role}.
@@ -441,7 +441,7 @@ const GeneratePage = () => {
         },
       ]);
 
-      console.log("Raw Ollama response:", questionsResponse);
+      // console.log("Raw Ollama response:", questionsResponse);
 
       // Step 3: Parse the questions array
       let parsedQuestions: string[];
@@ -454,10 +454,10 @@ const GeneratePage = () => {
           throw new Error("Response is not an array");
         }
       } catch (parseError) {
-        console.warn("Failed to parse JSON, attempting text extraction", {
-          error: parseError,
-          rawResponse: questionsResponse,
-        });
+        // console.warn("Failed to parse JSON, attempting text extraction", {
+        //   error: parseError,
+        //   rawResponse: questionsResponse,
+        // });
 
         // Fallback: extract questions from text
         const lines = questionsResponse.split('\n').filter(line => line.trim());
@@ -471,66 +471,62 @@ const GeneratePage = () => {
           .slice(0, data.amount);
 
         if (parsedQuestions.length === 0) {
-          console.error("No valid questions extracted", { rawResponse: questionsResponse });
-          throw new Error("Failed to generate valid questions from Ollama response");
+          // console.error("No valid questions extracted", { rawResponse: questionsResponse });
+          throw new Error("Failed to generate valid questions");
         }
       }
 
-      console.log("Parsed questions:", parsedQuestions);
+      // Ensure we have the right number of questions
+      if (parsedQuestions.length < data.amount) {
+        toast.info(`Generated ${parsedQuestions.length} questions instead of ${data.amount}`);
+      }
 
-      // Step 4: Save interview to database via Vercel API
-      toast.info("Saving interview to database...");
-      console.log("Saving interview to database...");
+      // Step 4: Save to database using the new save-interview API
+      toast.info("Saving interview...");
+      const idToken = await user.getIdToken();
       
-      const requestBody = {
-        ...data,
-        techstack: data.techstack.join(", "),
-        userid: user.uid,
-        questions: parsedQuestions, // Add the generated questions
-      };
-
-      const response = await fetch("/api/save-interview", {
+      const saveResponse = await fetch("/api/save-interview", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          type: data.type,
+          role: data.role,
+          level: data.level,
+          techstack: data.techstack,
+          amount: data.amount,
+          userid: user.uid,
+          targetColleges: data.targetColleges,
+          targetBranches: data.targetBranches,
+          targetYears: data.targetYears,
+          questions: parsedQuestions, // Pass the generated questions
+        }),
       });
 
-      const result = await response.json();
-      console.log("Save response:", result);
-
-      if (!response.ok) {
-        console.error("Save response not OK:", response.status, result);
-        throw new Error(result.error || "Failed to save interview");
-      }
-
-      if (result.success) {
-        console.log("Interview generated and saved successfully!");
-        toast.success(`Interview generated successfully! ${parsedQuestions.length} questions created.`);
-        // Refresh the interviews table if it's shown
-        if (showTable) {
-          fetchInterviews();
-        }
-        form.reset();
+      const saveResult = await saveResponse.json();
+      
+      if (saveResult.success) {
+        toast.success(`Interview created successfully! ${saveResult.questionsGenerated} questions generated.`);
+        router.push(`/interview/${saveResult.interviewId}`);
       } else {
-        console.error("Save result not successful:", result);
-        throw new Error(result.error || "Failed to save interview");
+        throw new Error(saveResult.error || "Failed to save interview");
       }
+
     } catch (error) {
-      console.error("Error generating interview:", error);
+      // console.error("Error generating interview:", error);
       
       // Provide more specific error messages
-      let errorMessage = "Failed to generate interview";
       if (error instanceof Error) {
         if (error.message.includes("fetch failed") || error.message.includes("NetworkError")) {
-          errorMessage = "Cannot connect to Ollama service. Please check if it's running at your configured URL.";
+          toast.error("Cannot connect to Ollama service. Please ensure it's running.");
         } else {
-          errorMessage = error.message;
+          toast.error(error.message);
         }
+      } else {
+        toast.error("An unexpected error occurred");
       }
-      
-      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -566,7 +562,7 @@ const GeneratePage = () => {
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit, (errors) => {
-                console.error("Form validation errors:", errors);
+                // console.error("Form validation errors:", errors);
                 toast.error("Please fix the form errors before submitting");
               })}
               className="w-full space-y-6 mt-4 form"

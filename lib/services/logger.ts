@@ -45,18 +45,19 @@ class Logger {
     // Console output with proper formatting
     const logMessage = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.service}] ${entry.message}`;
     
+    // Comment out console logging for production to reduce browser clutter
     switch (entry.level) {
       case LogLevel.DEBUG:
-        console.debug(logMessage, entry.data);
+        // console.debug(logMessage, entry.data);
         break;
       case LogLevel.INFO:
-        console.info(logMessage, entry.data);
+        // console.info(logMessage, entry.data);
         break;
       case LogLevel.WARN:
-        console.warn(logMessage, entry.data);
+        // console.warn(logMessage, entry.data);
         break;
       case LogLevel.ERROR:
-        console.error(logMessage, entry.error || entry.data);
+        // console.error(logMessage, entry.error || entry.data);
         break;
     }
   }

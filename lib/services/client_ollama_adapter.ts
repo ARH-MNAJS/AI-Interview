@@ -36,26 +36,26 @@ export class ClientOllamaAdapter {
     this.baseUrl = '/api/ollama-proxy';
     this.model = process.env.NEXT_PUBLIC_OLLAMA_MODEL || 'gemma3:latest';
     
-    console.log('ClientOllamaAdapter initialized with proxy connection:', {
-      baseUrl: this.baseUrl,
-      model: this.model,
-      note: 'Using Next.js proxy to avoid CORS restrictions'
-    });
+    // console.log('ClientOllamaAdapter initialized with proxy connection:', {
+    //   baseUrl: this.baseUrl,
+    //   model: this.model,
+    //   note: 'Using Next.js proxy to avoid CORS restrictions'
+    // });
   }
 
   async generateResponse(messages: ChatMessage[]): Promise<string> {
-    console.log('Starting client-side LLM generation with optimized connection pooling', {
-      messageCount: messages.length,
-      model: this.model,
-      baseUrl: this.baseUrl,
-    });
+    // console.log('Starting client-side LLM generation with optimized connection pooling', {
+    //   messageCount: messages.length,
+    //   model: this.model,
+    //   baseUrl: this.baseUrl,
+    // });
 
     // Use request queue to manage LLM concurrency
     return await requestQueue.enqueueLLMRequest(async () => {
-      console.log('Making pooled LLM request', {
-        messageCount: messages.length,
-        model: this.model
-      });
+      // console.log('Making pooled LLM request', {
+      //   messageCount: messages.length,
+      //   model: this.model
+      // });
 
       // Use HTTP connection pool with proper timeout for LLM requests
       const data: ChatResponse = await httpConnectionPool.post<ChatResponse>(
@@ -73,22 +73,22 @@ export class ClientOllamaAdapter {
 
       const content = data.message.content;
 
-      console.log('Client-side LLM generation completed', {
-        responseLength: content.length,
-        totalDuration: data.total_duration,
-        evalCount: data.eval_count,
-      });
+      // console.log('Client-side LLM generation completed', {
+      //   responseLength: content.length,
+      //   totalDuration: data.total_duration,
+      //   evalCount: data.eval_count,
+      // });
 
       return content;
     }, RequestPriority.HIGH); // High priority for LLM responses
   }
 
   async *generateStreamingResponse(messages: ChatMessage[]): AsyncGenerator<string, void, unknown> {
-    console.log('Starting client-side streaming LLM generation', {
-      messageCount: messages.length,
-      model: this.model,
-      baseUrl: this.baseUrl,
-    });
+    // console.log('Starting client-side streaming LLM generation', {
+    //   messageCount: messages.length,
+    //   model: this.model,
+    //   baseUrl: this.baseUrl,
+    // });
 
     try {
       const response = await fetch(`${this.baseUrl}/api/chat`, {
@@ -132,11 +132,11 @@ export class ClientOllamaAdapter {
                   yield data.message.content;
                 }
                 if (data.done) {
-                  console.log('Client-side streaming LLM generation completed');
+                  // console.log('Client-side streaming LLM generation completed');
                   return;
                 }
               } catch (parseError) {
-                console.warn('Client-side failed to parse streaming response line:', { line });
+                // console.warn('Client-side failed to parse streaming response line:', { line });
               }
             }
           }
@@ -145,14 +145,14 @@ export class ClientOllamaAdapter {
         reader.releaseLock();
       }
     } catch (error) {
-      console.error('Client-side streaming LLM generation failed:', error);
+      // console.error('Client-side streaming LLM generation failed:', error);
       throw error;
     }
   }
 
   async testConnection(): Promise<boolean> {
     try {
-      console.log('Testing client-side Ollama connection with connection pooling');
+      // console.log('Testing client-side Ollama connection with connection pooling');
       
       // Use request queue for health checks with low priority
       const data = await requestQueue.enqueueHealthCheckRequest(async () => {
@@ -160,16 +160,16 @@ export class ClientOllamaAdapter {
       });
       
       const hasModel = data.models?.some((model: any) => model.name.includes(this.model.split(':')[0]));
-      console.log('Client-side Ollama health check:', {
-        status: 'healthy',
-        modelAvailable: hasModel,
-        availableModels: data.models?.map((m: any) => m.name) || [],
-        poolStats: httpConnectionPool.getPoolStats()
-      });
+      // console.log('Client-side Ollama health check:', {
+      //   status: 'healthy',
+      //   modelAvailable: hasModel,
+      //   availableModels: data.models?.map((m: any) => m.name) || [],
+      //   poolStats: httpConnectionPool.getPoolStats()
+      // });
       return hasModel;
       
     } catch (error) {
-      console.error('Client-side Ollama health check failed:', error);
+      // console.error('Client-side Ollama health check failed:', error);
       return false;
     }
   }

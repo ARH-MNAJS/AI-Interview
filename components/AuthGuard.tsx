@@ -62,8 +62,13 @@ const AuthGuard = ({ children, user: serverUser, isAuthorizedForGenerate, isTPO 
     <div className="root-layout">
       <nav className="flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2">
-          <Image src="/logo.svg" alt="MockMate Logo" width={38} height={32} />
-          <h2 className="text-primary-100">CCInterview</h2>
+          <Image 
+            src="https://campuscredentials.com/CAMPUS.png" 
+            alt="Campus Credentials Logo" 
+            width={180} 
+            height={32}
+            className="object-contain"
+          />
         </Link>
         
         <div className="flex items-center gap-4">

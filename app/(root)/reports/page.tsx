@@ -97,16 +97,16 @@ const ReportsPage = () => {
 
   const fetchInterviews = async () => {
     if (!user || !college) {
-      console.log("❌ fetchInterviews: Missing user or college", { user: !!user, college: !!college });
+      // console.log("❌ fetchInterviews: Missing user or college", { user: !!user, college: !!college });
       return;
     }
 
-    console.log("🔍 fetchInterviews: Starting request", {
-      collegeId: college.id,
-      collegeName: college.name,
-      filters: filters,
-      userId: user.uid
-    });
+    // console.log("🔍 fetchInterviews: Starting request", {
+    //   collegeId: college.id,
+    //   collegeName: college.name,
+    //   filters: filters,
+    //   userId: user.uid
+    // });
 
     try {
       const idToken = await user.getIdToken();
@@ -116,7 +116,7 @@ const ReportsPage = () => {
       });
 
       const url = `/api/reports?${params}`;
-      console.log("📡 fetchInterviews: Making API request", { url, params: Object.fromEntries(params) });
+      // console.log("📡 fetchInterviews: Making API request", { url, params: Object.fromEntries(params) });
 
       const response = await fetch(url, {
         headers: {
@@ -124,24 +124,24 @@ const ReportsPage = () => {
         },
       });
 
-      console.log("📡 fetchInterviews: Response status", { status: response.status, statusText: response.statusText });
+      // console.log("📡 fetchInterviews: Response status", { status: response.status, statusText: response.statusText });
 
       const result = await response.json();
-      console.log("📊 fetchInterviews: API response", result);
+      // console.log("📊 fetchInterviews: API response", result);
       
       if (result.success) {
-        console.log("✅ fetchInterviews: Success", { 
-          interviewCount: result.data?.length || 0,
-          interviews: result.data 
-        });
+        // console.log("✅ fetchInterviews: Success", { 
+        //   interviewCount: result.data?.length || 0,
+        //   interviews: result.data 
+        // });
         setInterviews(result.data || []);
         setShowTable(true);
       } else {
-        console.error("❌ fetchInterviews: API returned error", result.error);
+        // console.error("❌ fetchInterviews: API returned error", result.error);
         toast.error("Failed to fetch interviews");
       }
     } catch (error) {
-      console.error("❌ fetchInterviews: Exception occurred", error);
+      // console.error("❌ fetchInterviews: Exception occurred", error);
       toast.error("Failed to fetch interviews");
     }
   };
@@ -193,10 +193,18 @@ const ReportsPage = () => {
     <div className="flex flex-col gap-8 max-w-7xl mx-auto p-6">
 
 
-      {/* Filters */}
+      {/* Header Actions */}
       <div className="border-gradient p-0.5 rounded-2xl w-full">
         <div className="card p-6">
-          <h3 className="text-xl font-bold mb-4">Filter Interviews</h3>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <h3 className="text-xl font-bold">Filter Interviews</h3>
+            <Button 
+              onClick={() => router.push("/reportsdownload")}
+              className="btn-secondary whitespace-nowrap"
+            >
+              📥 Download All Reports
+            </Button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 form">
             <div>
               <label className="label">Filter by Branch</label>
