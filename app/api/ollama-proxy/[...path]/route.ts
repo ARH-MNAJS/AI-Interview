@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const OLLAMA_BASE_URL = 'https://dypai.ccxai.uk';
+const OLLAMA_BASE_URL = 'https://aldelai.ccxai.uk';
 
 export async function GET(
   request: NextRequest,
