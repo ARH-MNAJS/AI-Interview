@@ -7,6 +7,7 @@ import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { User } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import { Download } from "lucide-react";
 
 interface College {
   id: string;
@@ -164,26 +165,17 @@ const ReportsPage = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center max-w-md">
-          <div className="mb-6">
-            <Image
-              src="/robot.png"
-              alt="Access Denied"
-              width={200}
-              height={200}
-              className="mx-auto opacity-50"
-            />
-          </div>
           <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Not Allowed</h2>
           <p className="text-gray-600 mb-6">
             You don't have permission to access the reports section. 
             This area is restricted to Training and Placement Officers (TPO) only.
           </p>
-          <Button 
+          <button 
             onClick={() => router.push("/")}
-            className="btn-primary"
+            className="px-6 py-2.5 bg-gradient-to-r from-[#b8b3f5] to-[#d4d0fc] hover:from-[#cac5fe] hover:to-[#e0dcff] text-dark-100 font-bold rounded-xl transition-colors duration-200 shadow-lg"
           >
             Go Back to Home
-          </Button>
+          </button>
         </div>
       </div>
     );
@@ -198,12 +190,13 @@ const ReportsPage = () => {
         <div className="card p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h3 className="text-xl font-bold">Filter Interviews</h3>
-            <Button 
+            <button 
               onClick={() => router.push("/reportsdownload")}
-              className="btn-secondary whitespace-nowrap"
+              className="px-6 py-2.5 bg-[#27282f]/80 border border-white/10 hover:border-[#cac5fe]/50 text-light-100 hover:text-white font-semibold rounded-xl transition-colors duration-200 hover:bg-[#27282f] whitespace-nowrap flex items-center gap-2"
             >
-              📥 Download All Reports
-            </Button>
+              <Download className="w-4 h-4" />
+              Download All Reports
+            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 form">
             <div>
@@ -211,11 +204,11 @@ const ReportsPage = () => {
               <select
                 value={filters.branch}
                 onChange={(e) => setFilters(prev => ({ ...prev, branch: e.target.value }))}
-                className="input w-full"
+                className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
               >
-                <option value="">All Branches</option>
+                <option value="" className="bg-[#27282f] text-white">All Branches</option>
                 {college.branches.map((branch) => (
-                  <option key={branch} value={branch}>
+                  <option key={branch} value={branch} className="bg-[#27282f] text-white">
                     {branch}
                   </option>
                 ))}
@@ -227,11 +220,11 @@ const ReportsPage = () => {
               <select
                 value={filters.year}
                 onChange={(e) => setFilters(prev => ({ ...prev, year: e.target.value }))}
-                className="input w-full"
+                className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
               >
-                <option value="">All Years</option>
+                <option value="" className="bg-[#27282f] text-white">All Years</option>
                 {college.years.map((year) => (
-                  <option key={year} value={year}>
+                  <option key={year} value={year} className="bg-[#27282f] text-white">
                     {year}
                   </option>
                 ))}
@@ -239,9 +232,9 @@ const ReportsPage = () => {
             </div>
             
             <div className="flex items-end">
-              <Button onClick={fetchInterviews} className="btn-primary w-full">
+              <button onClick={fetchInterviews} className="w-full px-6 py-2.5 bg-gradient-to-r from-[#b8b3f5] to-[#d4d0fc] hover:from-[#cac5fe] hover:to-[#e0dcff] text-dark-100 font-bold rounded-xl transition-colors duration-200 shadow-lg h-12">
                 Load Reports
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -308,12 +301,12 @@ const ReportsPage = () => {
                           {new Date(interview.createdAt).toLocaleDateString()}
                         </td>
                         <td className="border border-border px-4 py-3">
-                          <Button
+                          <button
                             onClick={() => viewReport(interview.id)}
-                            className="btn-primary text-sm"
+                            className="px-4 py-2 bg-gradient-to-r from-[#b8b3f5] to-[#d4d0fc] hover:from-[#cac5fe] hover:to-[#e0dcff] text-dark-100 font-bold rounded-xl transition-colors duration-200 shadow-lg text-sm"
                           >
                             Show Report
-                          </Button>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -322,13 +315,6 @@ const ReportsPage = () => {
               </div>
             ) : (
               <div className="text-center py-12">
-                <Image
-                  src="/robot.png"
-                  alt="No Reports"
-                  width={120}
-                  height={120}
-                  className="mx-auto opacity-30 mb-4"
-                />
                 <p className="text-foreground text-lg font-medium">No interviews found for the selected filters.</p>
                 <p className="text-muted-foreground text-sm mt-2">
                   Try adjusting your filters or check back later when interviews are assigned to your students.
@@ -342,13 +328,6 @@ const ReportsPage = () => {
       {!showTable && (
         <div className="border-gradient p-0.5 rounded-2xl w-full">
           <div className="card p-12 text-center">
-            <Image
-              src="/robot.png"
-              alt="Get Started"
-              width={150}
-              height={150}
-              className="mx-auto opacity-40 mb-6"
-            />
             <h3 className="text-xl font-semibold mb-2">Ready to View Reports?</h3>
             <p className="text-light-100 mb-6">
               Set your filters above and click "Load Reports" to see interview analytics for your students.

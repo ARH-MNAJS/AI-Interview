@@ -169,7 +169,7 @@ export function AuthPage({ type = 'sign-in' }: { type?: 'sign-in' | 'sign-up' })
         {/* Logo */}
         <div className="z-10 flex items-center gap-2">
           <Image 
-            src="https://campuscredentials.com/CAMPUS.png" 
+            src="/cclogo.png" 
             alt="Campus Credentials Logo" 
             width={180} 
             height={32}
@@ -212,7 +212,7 @@ export function AuthPage({ type = 'sign-in' }: { type?: 'sign-in' | 'sign-up' })
           {/* Logo for Mobile */}
           <div className="flex items-center gap-2 lg:hidden justify-center">
             <Image 
-              src="https://campuscredentials.com/CAMPUS.png" 
+              src="/cclogo.png" 
               alt="Campus Credentials Logo" 
               width={180} 
               height={32}

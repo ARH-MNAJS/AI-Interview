@@ -1,25 +1,51 @@
+"use client";
+
 import dayjs from "dayjs";
 import Link from "next/link";
 import { Code2, Users, Layers, Calendar, Star } from "lucide-react";
+import { useState, useEffect } from "react";
 
 import { cn } from "@/lib/utils";
 import { getFeedbackByInterviewId } from "@/lib/actions/general.action";
 
-const InterviewCard = async ({
+interface InterviewCardClientProps {
+  interviewId: string;
+  userId?: string;
+  role: string;
+  type: string;
+  techstack: string[];
+  createdAt: string;
+}
+
+const InterviewCardClient = ({
   interviewId,
   userId,
   role,
   type,
   techstack,
   createdAt,
-}: InterviewCardProps) => {
-  const feedback =
-    userId && interviewId
-      ? await getFeedbackByInterviewId({
-          interviewId,
-          userId,
-        })
-      : null;
+}: InterviewCardClientProps) => {
+  const [feedback, setFeedback] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFeedback = async () => {
+      if (userId && interviewId) {
+        try {
+          const feedbackData = await getFeedbackByInterviewId({
+            interviewId,
+            userId,
+          });
+          setFeedback(feedbackData);
+        } catch (error) {
+          console.error("Error fetching feedback:", error);
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchFeedback();
+  }, [interviewId, userId]);
 
   const normalizedType = /mix/gi.test(type) ? "Mixed" : type;
 
@@ -82,14 +108,12 @@ const InterviewCard = async ({
               <h3 className="text-xl font-semibold text-white capitalize mb-2">
                 {role} Interview
               </h3>
-              <div className="flex items-center gap-2">
-                <div className={cn("p-2 rounded-lg", typeConfig.bgColor)}>
-                  <TypeIcon className={cn("size-4", typeConfig.textColor)} />
-                </div>
-                <span className={cn("text-sm font-medium", typeConfig.textColor)}>
+              <p className="text-sm text-light-100">
+                <span className={cn("inline-flex items-center gap-1", typeConfig.textColor)}>
+                  <TypeIcon className="w-4 h-4" />
                   {normalizedType}
                 </span>
-              </div>
+              </p>
             </div>
           </div>
 
@@ -114,7 +138,7 @@ const InterviewCard = async ({
           </div>
 
           {/* Action Button */}
-          <div className="mt-auto pt-4">
+          <div className="mt-auto">
             <Link
               href={
                 feedback
@@ -133,5 +157,5 @@ const InterviewCard = async ({
   );
 };
 
-export default InterviewCard;
+export default InterviewCardClient;
 

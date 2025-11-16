@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { signOut } from "firebase/auth";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 
@@ -23,9 +22,12 @@ const LogoutButton = () => {
   };
 
   return (
-    <Button onClick={handleLogout} className="btn-secondary">
+    <button 
+      onClick={handleLogout}
+      className="px-6 py-2.5 bg-[#27282f]/80 border border-white/10 hover:border-destructive-100/50 text-light-100 hover:text-destructive-100 font-semibold rounded-xl transition-all duration-200 hover:bg-[#27282f]"
+    >
       Logout
-    </Button>
+    </button>
   );
 };
 

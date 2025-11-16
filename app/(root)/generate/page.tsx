@@ -97,8 +97,8 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
     <div className="relative" ref={dropdownRef}>
       {/* Main Input */}
       <div 
-        className={`input w-full min-h-[2.5rem] cursor-pointer flex flex-wrap items-center gap-1 p-2 ${
-          disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white hover:border-blue-400'
+        className={`w-full min-h-[3rem] cursor-pointer flex flex-wrap items-center gap-1 p-3 rounded-xl bg-[#27282f]/80 border border-white/10 text-white transition-all duration-200 ${
+          disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#cac5fe]/50 focus:border-[#cac5fe] focus:ring-2 focus:ring-[#cac5fe]/20'
         }`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
@@ -107,7 +107,7 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
           selectedValues.map((value) => (
             <span
               key={value}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-md"
+              className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-[#cac5fe]/20 text-[#cac5fe] rounded-lg border border-[#cac5fe]/30"
             >
               {getSelectedLabel(value)}
               <button
@@ -116,14 +116,14 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
                   e.stopPropagation();
                   handleRemoveTag(value);
                 }}
-                className="text-blue-600 hover:text-blue-800 ml-1"
+                className="text-[#cac5fe] hover:text-white ml-1 transition-colors"
               >
                 ×
               </button>
             </span>
           ))
         ) : (
-          <span className="text-gray-500 text-sm">{placeholder}</span>
+          <span className="text-gray-400 text-sm">{placeholder}</span>
         )}
         
         {/* Dropdown Arrow */}
@@ -141,15 +141,15 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-hidden">
+        <div className="absolute z-50 w-full mt-2 bg-[#27282f] border border-white/10 rounded-xl shadow-xl max-h-60 overflow-hidden">
           {/* Search Input */}
-          <div className="p-2 border-b border-gray-200">
+          <div className="p-3 border-b border-white/10">
             <input
               type="text"
               placeholder={searchPlaceholder}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 text-sm bg-[#1A1C20] border border-white/10 rounded-lg text-white placeholder:text-gray-400 focus:outline-none focus:border-[#cac5fe] focus:ring-2 focus:ring-[#cac5fe]/20"
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -160,21 +160,21 @@ const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
               filteredOptions.map((option) => (
                 <div
                   key={option.value}
-                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 flex items-center justify-between ${
-                    selectedValues.includes(option.value) ? 'bg-blue-100 text-blue-800' : 'text-gray-900'
+                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-[#1A1C20] flex items-center justify-between transition-colors ${
+                    selectedValues.includes(option.value) ? 'bg-[#cac5fe]/10 text-[#cac5fe]' : 'text-light-100'
                   }`}
                   onClick={() => handleToggleOption(option.value)}
                 >
                   <span>{option.label}</span>
                   {selectedValues.includes(option.value) && (
-                    <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 h-4 text-[#cac5fe]" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                     </svg>
                   )}
                 </div>
               ))
             ) : (
-              <div className="px-3 py-4 text-sm text-gray-500 text-center">
+              <div className="px-3 py-4 text-sm text-gray-400 text-center">
                 {emptyMessage}
               </div>
             )}
@@ -565,27 +565,45 @@ const GeneratePage = () => {
                 // console.error("Form validation errors:", errors);
                 toast.error("Please fix the form errors before submitting");
               })}
-              className="w-full space-y-6 mt-4 form"
+              className="w-full mt-4 form"
             >
-              <FormField
-                control={form.control}
-                name="role"
-                label="Job Role"
-                placeholder="e.g., Frontend Developer, Product Manager"
-                type="text"
-              />
+              <div className="grid grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="role"
+                  label="Job Role"
+                  placeholder="e.g., Frontend Developer, Product Manager"
+                  type="text"
+                />
 
-              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Number of Questions</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    {...form.register("amount", { valueAsNumber: true })}
+                    className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+                  />
+                  {form.formState.errors.amount && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {form.formState.errors.amount.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 mt-6">
                 <div>
                   <label className="label">Experience Level</label>
                   <select
                     {...form.register("level")}
-                    className="input w-full"
+                    className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
                   >
-                    <option value="Junior">Junior</option>
-                    <option value="Mid-level">Mid-level</option>
-                    <option value="Senior">Senior</option>
-                    <option value="Lead">Lead</option>
+                    <option value="Junior" className="bg-[#27282f] text-white">Junior</option>
+                    <option value="Mid-level" className="bg-[#27282f] text-white">Mid-level</option>
+                    <option value="Senior" className="bg-[#27282f] text-white">Senior</option>
+                    <option value="Lead" className="bg-[#27282f] text-white">Lead</option>
                   </select>
                   {form.formState.errors.level && (
                     <p className="text-red-500 text-sm mt-1">
@@ -598,11 +616,11 @@ const GeneratePage = () => {
                   <label className="label">Interview Type</label>
                   <select
                     {...form.register("type")}
-                    className="input w-full"
+                    className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
                   >
-                    <option value="Technical">Technical</option>
-                    <option value="Behavioral">Behavioral</option>
-                    <option value="Mixed">Mixed</option>
+                    <option value="Technical" className="bg-[#27282f] text-white">Technical</option>
+                    <option value="Behavioral" className="bg-[#27282f] text-white">Behavioral</option>
+                    <option value="Mixed" className="bg-[#27282f] text-white">Mixed</option>
                   </select>
                   {form.formState.errors.type && (
                     <p className="text-red-500 text-sm mt-1">
@@ -612,19 +630,19 @@ const GeneratePage = () => {
                 </div>
               </div>
 
-              <div>
+              <div className="mt-6">
                 <label className="label">Tech Stack</label>
-                <div className="flex flex-wrap gap-2 p-3 border rounded-md bg-background min-h-[2.5rem]">
+                <div className="flex flex-wrap gap-2 p-3 border border-white/10 rounded-xl bg-[#27282f]/80 min-h-[3rem]">
                   {form.watch("techstack").map((tech, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-sm bg-primary/10 text-primary rounded-md"
+                      className="inline-flex items-center gap-1 px-3 py-1 text-sm bg-[#cac5fe]/20 text-[#cac5fe] rounded-lg border border-[#cac5fe]/30"
                     >
                       {tech}
                       <button
                         type="button"
                         onClick={() => removeTech(tech)}
-                        className="text-primary/70 hover:text-primary ml-1"
+                        className="text-[#cac5fe] hover:text-white ml-1 transition-colors"
                       >
                         ×
                       </button>
@@ -638,7 +656,7 @@ const GeneratePage = () => {
                     onKeyDown={handleTechKeyDown}
                     onBlur={addTech}
                     placeholder={form.watch("techstack").length === 0 ? "Type technologies and press Enter" : "Add more..."}
-                    className="flex-1 min-w-[120px] bg-transparent outline-none"
+                    className="flex-1 min-w-[120px] bg-transparent outline-none text-white placeholder:text-gray-400"
                   />
                 </div>
                 {form.formState.errors.techstack && (
@@ -648,44 +666,46 @@ const GeneratePage = () => {
                 )}
               </div>
 
-              {/* Target Colleges */}
-              <div>
-                <label className="label">Target Colleges</label>
-                <MultiSelectDropdown
-                  options={colleges.map(college => ({ value: college.id, label: college.name }))}
-                  selectedValues={form.watch("targetColleges")}
-                  onChange={(values) => handleCollegeSelection(values)}
-                  placeholder="Select colleges..."
-                  searchPlaceholder="Search colleges..."
-                />
-                {form.formState.errors.targetColleges && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {form.formState.errors.targetColleges.message}
-                  </p>
-                )}
-              </div>
+              <div className="grid grid-cols-2 gap-6 mt-6">
+                {/* Target Colleges */}
+                <div>
+                  <label className="label">Target Colleges</label>
+                  <MultiSelectDropdown
+                    options={colleges.map(college => ({ value: college.id, label: college.name }))}
+                    selectedValues={form.watch("targetColleges")}
+                    onChange={(values) => handleCollegeSelection(values)}
+                    placeholder="Select colleges..."
+                    searchPlaceholder="Search colleges..."
+                  />
+                  {form.formState.errors.targetColleges && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {form.formState.errors.targetColleges.message}
+                    </p>
+                  )}
+                </div>
 
-              {/* Target Branches */}
-              <div>
-                <label className="label">Target Branches</label>
-                <MultiSelectDropdown
-                  options={selectedCollegeData.branches.map(branch => ({ value: branch, label: branch }))}
-                  selectedValues={form.watch("targetBranches")}
-                  onChange={(values) => form.setValue("targetBranches", values)}
-                  placeholder="Select branches..."
-                  searchPlaceholder="Search branches..."
-                  disabled={form.watch("targetColleges").length === 0}
-                  emptyMessage={form.watch("targetColleges").length === 0 ? "Please select a college first" : "No branches available"}
-                />
-                {form.formState.errors.targetBranches && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {form.formState.errors.targetBranches.message}
-                  </p>
-                )}
+                {/* Target Branches */}
+                <div>
+                  <label className="label">Target Branches</label>
+                  <MultiSelectDropdown
+                    options={selectedCollegeData.branches.map(branch => ({ value: branch, label: branch }))}
+                    selectedValues={form.watch("targetBranches")}
+                    onChange={(values) => form.setValue("targetBranches", values)}
+                    placeholder="Select branches..."
+                    searchPlaceholder="Search branches..."
+                    disabled={form.watch("targetColleges").length === 0}
+                    emptyMessage={form.watch("targetColleges").length === 0 ? "Please select a college first" : "No branches available"}
+                  />
+                  {form.formState.errors.targetBranches && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {form.formState.errors.targetBranches.message}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {/* Target Years */}
-              <div>
+              <div className="mt-6">
                 <label className="label">Target Years</label>
                 <MultiSelectDropdown
                   options={selectedCollegeData.years.map(year => ({ value: year, label: year.toString() }))}
@@ -703,29 +723,15 @@ const GeneratePage = () => {
                 )}
               </div>
 
-              <div>
-                <label className="label">Number of Questions</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  {...form.register("amount", { valueAsNumber: true })}
-                  className="input w-full"
-                />
-                {form.formState.errors.amount && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {form.formState.errors.amount.message}
-                  </p>
-                )}
+              <div className="mt-6">
+                <button 
+                  className="w-full bg-gradient-to-r from-[#b8b3f5] to-[#d4d0fc] hover:from-[#cac5fe] hover:to-[#e0dcff] text-dark-100 font-bold rounded-xl h-12 transition-colors duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
+                  type="submit" 
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Generating Interview..." : "Generate Interview"}
+                </button>
               </div>
-
-              <Button 
-                className="btn w-full" 
-                type="submit" 
-                disabled={isLoading}
-              >
-                {isLoading ? "Generating Interview..." : "Generate Interview"}
-              </Button>
             </form>
           </Form>
         </div>
@@ -741,11 +747,11 @@ const GeneratePage = () => {
               <select
                 value={tableFilters.college}
                 onChange={(e) => setTableFilters(prev => ({ ...prev, college: e.target.value }))}
-                className="input w-full"
+                className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
               >
-                <option value="">Select College</option>
+                <option value="" className="bg-[#27282f] text-white">Select College</option>
                 {colleges.map((college) => (
-                  <option key={college.id} value={college.id}>
+                  <option key={college.id} value={college.id} className="bg-[#27282f] text-white">
                     {college.name}
                   </option>
                 ))}
@@ -757,14 +763,14 @@ const GeneratePage = () => {
               <select
                 value={tableFilters.branch}
                 onChange={(e) => setTableFilters(prev => ({ ...prev, branch: e.target.value }))}
-                className="input w-full"
+                className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
                 disabled={!tableFilters.college}
               >
-                <option value="">All Branches</option>
+                <option value="" className="bg-[#27282f] text-white">All Branches</option>
                 {tableFilters.college && (() => {
                   const selectedCollege = colleges.find(c => c.id === tableFilters.college);
                   return selectedCollege?.branches?.map((branch) => (
-                    <option key={branch} value={branch}>
+                    <option key={branch} value={branch} className="bg-[#27282f] text-white">
                       {branch}
                     </option>
                   )) || [];
@@ -777,14 +783,14 @@ const GeneratePage = () => {
               <select
                 value={tableFilters.year}
                 onChange={(e) => setTableFilters(prev => ({ ...prev, year: e.target.value }))}
-                className="input w-full"
+                className="flex h-12 w-full rounded-xl border border-white/10 bg-[#27282f]/80 px-3 py-2 text-sm text-white ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#cac5fe]/20 focus-visible:border-[#cac5fe] disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
                 disabled={!tableFilters.college}
               >
-                <option value="">All Years</option>
+                <option value="" className="bg-[#27282f] text-white">All Years</option>
                 {tableFilters.college && (() => {
                   const selectedCollege = colleges.find(c => c.id === tableFilters.college);
                   return selectedCollege?.years?.map((year) => (
-                    <option key={year} value={year}>
+                    <option key={year} value={year} className="bg-[#27282f] text-white">
                       {year}
                     </option>
                   )) || [];
@@ -793,9 +799,9 @@ const GeneratePage = () => {
             </div>
             
             <div className="flex items-end">
-              <Button onClick={fetchInterviews} className="btn-primary w-full">
+              <button onClick={fetchInterviews} className="w-full px-6 py-2.5 bg-gradient-to-r from-[#b8b3f5] to-[#d4d0fc] hover:from-[#cac5fe] hover:to-[#e0dcff] text-dark-100 font-bold rounded-xl transition-colors duration-200 shadow-lg h-12">
                 Load Interviews
-              </Button>
+              </button>
             </div>
           </div>
         </div>
@@ -843,12 +849,12 @@ const GeneratePage = () => {
                           {new Date(interview.createdAt).toLocaleDateString()}
                         </td>
                         <td className="border border-border px-4 py-3">
-                          <Button
+                          <button
                             onClick={() => showQuestions(interview.questions)}
-                            className="btn-secondary text-sm"
+                            className="px-4 py-2 bg-[#27282f]/80 border border-white/10 hover:border-[#cac5fe]/50 text-light-100 hover:text-white font-semibold rounded-xl transition-colors duration-200 hover:bg-[#27282f] text-sm"
                           >
                             View Questions
-                          </Button>
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -885,12 +891,12 @@ const GeneratePage = () => {
                 ))}
               </div>
               <div className="mt-6 text-right">
-                <Button
+                <button
                   onClick={() => setShowQuestionsModal(false)}
-                  className="btn-primary"
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#b8b3f5] to-[#d4d0fc] hover:from-[#cac5fe] hover:to-[#e0dcff] text-dark-100 font-bold rounded-xl transition-colors duration-200 shadow-lg"
                 >
                   Close
-                </Button>
+                </button>
               </div>
             </div>
           </div>

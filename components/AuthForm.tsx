@@ -157,7 +157,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
       <div className="flex flex-col gap-2 card py-10 px-10">
         <div className="flex flex-row gap-2 justify-center">
           <Image 
-            src="https://campuscredentials.com/CAMPUS.png" 
+            src="/cclogo.png" 
             alt="Campus Credentials Logo" 
             width={180} 
             height={32}

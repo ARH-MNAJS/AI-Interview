@@ -212,15 +212,6 @@ const ReportsDownloadPage = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center max-w-md">
-          <div className="mb-6">
-            <Image
-              src="/robot.png"
-              alt="Access Denied"
-              width={200}
-              height={200}
-              className="mx-auto opacity-50"
-            />
-          </div>
           <h2 className="text-3xl font-bold text-gray-800 mb-4">Access Not Allowed</h2>
           <p className="text-gray-600 mb-6">
             You don't have permission to access the reports download section. 
